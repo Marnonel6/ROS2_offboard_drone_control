@@ -1,5 +1,5 @@
 """
-Example to launch a sensor_combined listener node.
+Launch file
 """
 
 from launch import LaunchDescription
@@ -8,21 +8,18 @@ from launch.actions import ExecuteProcess
 
 def generate_launch_description():
 
-    # micro_ros_agent = ExecuteProcess(
-    #     cmd=[[
-    #         'micro-ros-agent udp4 --port 8888 -v '
-    #     ]],
-    #     shell=True
-    # )
-
-    drone_control_node = Node(
-        package='drone_control',
-        executable='drone_control',
-        output='screen',
-        shell=True,
-    )
-
     return LaunchDescription([
-        #micro_ros_agent,
-        drone_control_node
+        # Start the mavsdk_server that connects over serial (UART) to the Pixhawk FC
+        ExecuteProcess(cmd=[['echo \'osprey\' | sudo -S \
+                            ~/.local/lib/python3.10/site-packages/mavsdk/bin/mavsdk_server \
+                            serial:///dev/serial0:57600'
+                            ]],
+                    shell=True
+                    ),
+        # Start the drone_control node
+        Node(package='drone_control',
+            executable='drone_control',
+            output='screen',
+            shell=True,
+            ),
     ])
