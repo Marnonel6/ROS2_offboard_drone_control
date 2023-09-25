@@ -16,9 +16,9 @@ def generate_launch_description():
                             ]],
                        shell=True
                     ),
-        # Start the drone_control node
-        Node(package='drone_control',
-             executable='drone_control',
+        # Start the drone_data node
+        Node(package='mavsdk_ros2',
+             executable='drone_data',
              output='screen',
             ),
     ])
