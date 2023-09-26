@@ -1,1 +1,1 @@
-# Autonomous_Drone_Delivery
+# MAVSDK_SERVER over UART serial conrol with python
