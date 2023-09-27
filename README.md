@@ -7,8 +7,16 @@
 
 ## Pixhawk 6X setup
 - PX4 v1.14 for new Micro XRCE-DDS capabilities
-- TODO: Build instructions here
+- Build v1.14 instructions [here](https://docs.px4.io/main/en/dev_setup/building_px4.html)
+
+        git clone https://github.com/PX4/PX4-Autopilot.git --recursive
+        git checkout release/v1.14
+        make px4_fmu-v6x_default upload # Plug in Pixhawk before running this
+
+- TODO: Params to set in QGC
+
 - If not using DDS, but serial and mavsdk then PX4 v1.13 -> This enables HITL
+- TODO: Params to set in QGC
 
 ## Setup on drone control computer (Laptop for SITL or RPi 4 on drone)
 - [Install ROS2 Humble](https://docs.px4.io/main/en/ros/ros2_comm.html#install-ros-2)
@@ -47,10 +55,23 @@
 - Instructions [here](https://docs.px4.io/main/en/ros/ros2_comm.html#build-ros-2-workspace)
 
 # Off-board RPi control over serial (UART->Telem 2)
+- Start the agent on the drone control computer:
 
+        TODO: MicroXRCEAgent -----SOME SERIAL WAY------ 
 
+- To see if DDS client is running on pixhawk
+    - Open Qgroundcontrol
+    - Open Mavlink Console
+    - Run:
+
+            uxrce_dds_client status
 
 
 
 
 # TODO: HITL with PX4 v1.13 and Gazebo classic
+
+
+
+# References
+- [PX4 DDS topics](https://github.com/PX4/PX4-Autopilot/blob/main/src/modules/uxrce_dds_client/dds_topics.yaml)

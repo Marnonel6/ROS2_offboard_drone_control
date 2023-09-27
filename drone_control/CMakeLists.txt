@@ -10,15 +10,45 @@ find_package(ament_cmake REQUIRED)
 # uncomment the following section in order to fill in
 # further dependencies manually.
 # find_package(<dependency> REQUIRED)
+find_package(ament_cmake REQUIRED)
+find_package(builtin_interfaces REQUIRED)
+find_package(eigen3_cmake_module REQUIRED)
+# find_package(Eigen3 REQUIRED)
+find_package(geometry_msgs REQUIRED)
+find_package(px4_msgs REQUIRED)
+find_package(rclcpp REQUIRED)
+find_package(sensor_msgs REQUIRED)
 
+#################
+# Setup targets #
+#################
+# Drone control node
 add_executable(drone_control src/drone_control.cpp)
-target_include_directories(drone_control PUBLIC
-  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-  $<INSTALL_INTERFACE:include>)
-target_compile_features(drone_control PUBLIC c_std_99 cxx_std_17)  # Require C99 and C++17
-
+ament_target_dependencies(drone_control rclcpp px4_msgs)
 install(TARGETS drone_control
   DESTINATION lib/${PROJECT_NAME})
+
+
+# target_include_directories(drone_control PUBLIC
+#     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+#     $<INSTALL_INTERFACE:include>)
+# target_compile_features(drone_control PUBLIC c_std_99 cxx_std_17)  # Require C99 and C++17
+
+############
+# Install ##
+############
+
+# Export information to downstream packages
+ament_export_dependencies(ament_cmake rclcpp rosidl_default_runtime eigen3_cmake_module Eigen3 px4_msgs geometry_msgs sensor_msgs)
+
+ament_export_include_directories(include)
+
+# Install launch files.
+install(DIRECTORY launch DESTINATION share/${PROJECT_NAME}/)
+
+############
+# Testing ##
+############
 
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)
