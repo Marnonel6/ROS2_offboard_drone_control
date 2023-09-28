@@ -9,6 +9,8 @@
 #include <cstdio>
 #include <math.h>
 #include <vector>
+#include <thread>
+#include <mutex>
 // ROS2 libs
 #include <rclcpp/rclcpp.hpp>
 #include "geometry_msgs/msg/point.hpp"
@@ -27,7 +29,10 @@ enum class State {
     IDLE,
     OFFBOARD,
     MISSION1,
-    MISSION2
+    MISSION2,
+    MISSION3,
+    MISSION4,
+    LAND
 };
 
 class DroneControl : public rclcpp::Node
@@ -104,6 +109,11 @@ private:
     // Vehicle position from fmu/out/vehicle_odometry -> Init to all zeros
     geometry_msgs::msg::Point vehicle_position_ = geometry_msgs::msg::Point{};
     std::vector<geometry_msgs::msg::Point> waypoints_;
+
+    // Flags
+    mutable std::mutex mutex_; // Used in the Non-block wait thread timer
+    bool flag_timer_done_ = false;
+    bool has_executed_ = false;  // Flag to check if the code has executed before
 
     //
     // TODO waypoint should be read in from a .json
@@ -241,6 +251,36 @@ private:
         vehicle_command_publisher_->publish(msg);
     }
 
+    /**
+     * @brief Non-blocking timer counter thread. This will change the flag: Flag_timer_done = True
+     * @param duration Time to sleep in seconds
+    */
+    void nonBlockingWait(std::chrono::seconds duration)
+    {
+        std::thread([this, duration]() {
+            std::this_thread::sleep_for(duration);
+
+            // Shared data variable mutex is locked when the non_blocking_wait_thread is accessing
+            // it and unlocked when the non_blocking_wait_thread is done accessing it. The {} help
+            // with data syncronization and to ensure two thread do not change a shared variable
+            // at the same time.
+            {
+                std::lock_guard<std::mutex> lock(mutex_);
+                flag_timer_done_ = true;
+            }
+
+            RCLCPP_INFO(rclcpp::get_logger("non_blocking_wait_thread"), "Waited for %ld seconds.", duration.count());
+        }).detach();
+    }
+
+    // // Call this in your main program or another function to check if the time has passed
+    // bool hasTimePassed() const
+    // {
+    //     std::lock_guard<std::mutex> lock(mutex_);
+    //     return flag_timer_done_;
+    // }
+
+
     ///
     ///
     /// LIBRARY functions later!!
@@ -272,12 +312,9 @@ private:
                           const geometry_msgs::msg::Point v2,
                           double tolerance = 1.0)
     {
-        std::cout << "Euclidean distance: " << std::abs(euclidean_distance(v1, v2)) << std::endl;
+        // std::cout << "Euclidean distance: " << std::abs(euclidean_distance(v1, v2)) << std::endl;
         return std::abs(euclidean_distance(v1, v2)) <= tolerance;
     }
-
-
-
     ///
     ///
     /// LIBRARY functions later!!
@@ -320,15 +357,32 @@ private:
             // Off-board control mode
             publish_offboard_control_mode();
             // Take-off and hover at 5[m]
-            publish_trajectory_setpoint({0.0, 0.0, -5.0}, {1.0, 1.0, 1.0}, M_PI_2);
+            publish_trajectory_setpoint({static_cast<float>(waypoints_.at(0).x), 
+                                         static_cast<float>(waypoints_.at(0).y),
+                                         static_cast<float>(waypoints_.at(0).z)},
+                                         {1.0, 1.0, 1.0}, M_PI_2);
 
             // Check if the setpoint has been reached in a specified tolerance
             if (reached_setpoint(waypoints_.at(0), vehicle_position_, 2.0))
             {
-                // Change state to MISSION1
-                current_state_ = State::MISSION1;
-                RCLCPP_INFO(get_logger(), "State transitioned to MISSION1");
-                // TODO NOTE It moves very fast when it reaches the waypoint add a delay or waypoint stay timer
+                // nonBlockingWait timer
+                if (!has_executed_)
+                {
+                    nonBlockingWait(seconds(5)); 
+                    has_executed_ = true;
+                }
+
+                // Wait until nonBlockingWait is done
+                if (flag_timer_done_)
+                {
+                    // Change state to MISSION1
+                    current_state_ = State::MISSION1;
+                    RCLCPP_INFO(get_logger(), "State transitioned to MISSION1");
+
+                    // Reset flags
+                    flag_timer_done_ = false;
+                    has_executed_ = false;
+                }
             }
         }
         // MISSION1 state
@@ -336,20 +390,144 @@ private:
         {
             // Off-board control mode
             publish_offboard_control_mode();
-            // Take-off and hover at 5[m]
-            publish_trajectory_setpoint({0.0, 5.0, -5.0}, {1.0, 1.0, 1.0}, M_PI_2);
+            // Move 5[m] forward
+            publish_trajectory_setpoint({static_cast<float>(waypoints_.at(1).x), 
+                                         static_cast<float>(waypoints_.at(1).y),
+                                         static_cast<float>(waypoints_.at(1).z)},
+                                         {1.0, 1.0, 1.0}, M_PI_2);
 
             // Check if the setpoint has been reached in a specified tolerance
             if (reached_setpoint(waypoints_.at(1), vehicle_position_, 2.0))
             {
-                // Change state to MISSION1
-                current_state_ = State::MISSION2;
-                RCLCPP_INFO(get_logger(), "State transitioned to MISSION2");
+                // nonBlockingWait timer
+                if (!has_executed_)
+                {
+                    nonBlockingWait(seconds(5)); 
+                    has_executed_ = true;
+                }
+
+                // Wait until nonBlockingWait is done
+                if (flag_timer_done_)
+                {
+                    // Change state to MISSION2
+                    current_state_ = State::MISSION2;
+                    RCLCPP_INFO(get_logger(), "State transitioned to MISSION2");
+
+                    // Reset flags
+                    flag_timer_done_ = false;
+                    has_executed_ = false;
+                }
             }
-
         }
+        // MISSION2 state
+        else if (current_state_ == State::MISSION2)
+        {
+            // Off-board control mode
+            publish_offboard_control_mode();
+            // Move 5[m] left
+            publish_trajectory_setpoint({static_cast<float>(waypoints_.at(2).x), 
+                                         static_cast<float>(waypoints_.at(2).y),
+                                         static_cast<float>(waypoints_.at(2).z)},
+                                         {1.0, 1.0, 1.0}, M_PI_2);
 
+            // Check if the setpoint has been reached in a specified tolerance
+            if (reached_setpoint(waypoints_.at(2), vehicle_position_, 2.0))
+            {
+                // nonBlockingWait timer
+                if (!has_executed_)
+                {
+                    nonBlockingWait(seconds(5)); 
+                    has_executed_ = true;
+                }
 
+                // Wait until nonBlockingWait is done
+                if (flag_timer_done_)
+                {
+                    // Change state to MISSION2
+                    current_state_ = State::MISSION3;
+                    RCLCPP_INFO(get_logger(), "State transitioned to MISSION3");
+
+                    // Reset flags
+                    flag_timer_done_ = false;
+                    has_executed_ = false;
+                }
+            }
+        }
+        // MISSION3 state
+        else if (current_state_ == State::MISSION3)
+        {
+            // Off-board control mode
+            publish_offboard_control_mode();
+            // Move 5[m] back
+            publish_trajectory_setpoint({static_cast<float>(waypoints_.at(3).x), 
+                                         static_cast<float>(waypoints_.at(3).y),
+                                         static_cast<float>(waypoints_.at(3).z)},
+                                         {1.0, 1.0, 1.0}, M_PI_2);
+
+            // Check if the setpoint has been reached in a specified tolerance
+            if (reached_setpoint(waypoints_.at(3), vehicle_position_, 2.0))
+            {
+                // nonBlockingWait timer
+                if (!has_executed_)
+                {
+                    nonBlockingWait(seconds(5)); 
+                    has_executed_ = true;
+                }
+
+                // Wait until nonBlockingWait is done
+                if (flag_timer_done_)
+                {
+                    // Change state to MISSION4
+                    current_state_ = State::MISSION4;
+                    RCLCPP_INFO(get_logger(), "State transitioned to MISSION4");
+
+                    // Reset flags
+                    flag_timer_done_ = false;
+                    has_executed_ = false;
+                }
+            }
+        }
+        // MISSION4 state
+        else if (current_state_ == State::MISSION4)
+        {
+            // Off-board control mode
+            publish_offboard_control_mode();
+            // Move 5[m] right (Back home)
+            publish_trajectory_setpoint({static_cast<float>(waypoints_.at(4).x), 
+                                         static_cast<float>(waypoints_.at(4).y),
+                                         static_cast<float>(waypoints_.at(4).z)},
+                                         {1.0, 1.0, 1.0}, M_PI_2);
+
+            // Check if the setpoint has been reached in a specified tolerance
+            if (reached_setpoint(waypoints_.at(4), vehicle_position_, 2.0))
+            {
+                // nonBlockingWait timer
+                if (!has_executed_)
+                {
+                    nonBlockingWait(seconds(5)); 
+                    has_executed_ = true;
+                }
+
+                // Wait until nonBlockingWait is done
+                if (flag_timer_done_)
+                {
+                    // Change state to LAND
+                    current_state_ = State::LAND;
+                    RCLCPP_INFO(get_logger(), "State transitioned to LAND");
+
+                    // Reset flags
+                    flag_timer_done_ = false;
+                    has_executed_ = false;
+                }
+            }
+        }
+        // LAND state
+        else if (current_state_ == State::LAND)
+        {
+            // TODO actually add code for landing noo it will just timeout as I'm not sending
+            // off-board control anymore.
+            RCLCPP_INFO(get_logger(), "LANDING ...");
+        }
     }
 };
 
