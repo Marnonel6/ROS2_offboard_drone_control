@@ -30,6 +30,25 @@
         make
         sudo make install
         sudo ldconfig /usr/local/lib/
+- [Fields2Cover](https://github.com/Marnonel6/Fields2Cover)
+
+        sudo apt-get update
+        sudo apt-get install --no-install-recommends software-properties-common
+        sudo add-apt-repository ppa:ubuntugis/ppa
+        sudo apt-get update
+        sudo apt-get install --no-install-recommends build-essential ca-certificates cmake \
+            doxygen g++ git libeigen3-dev libgdal-dev libpython3-dev python3 python3-pip \
+            python3-matplotlib python3-tk lcov libgtest-dev libtbb-dev swig libgeos-dev
+        python3 -m pip install gcovr
+
+        git clone git@github.com:Marnonel6/Fields2Cover.git
+        cd Fields2Cover
+        git checkout feature/swath_discretization (NOTE: Waiting on a pull-request to main)
+        mkdir -p build;
+        cd build;
+        cmake -DCMAKE_BUILD_TYPE=Release ..;
+        make -j$(nproc);
+        sudo make install;
 
 ## PX4 SITL Simulation with (Ignition) Gazebo setup (On Ubuntu Laptop)
 - [Install PX4 development environment](https://docs.px4.io/main/en/ros/ros2_comm.html#install-px4)
