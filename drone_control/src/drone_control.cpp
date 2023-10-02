@@ -79,7 +79,6 @@ public:
         waypoints_.push_back(waypoint_4_);
 
         // Initialize variables
-        offboard_setpoint_counter_ = 0;
         current_state_ = State::IDLE;
         RCLCPP_INFO(get_logger(), "State transitioned to IDLE");
 
@@ -104,8 +103,9 @@ public:
 
 private:
     // Variables
-    size_t offboard_setpoint_counter_;   // Counter for the number of setpoints sent
-    State current_state_;                // Current state machine state
+    size_t offboard_setpoint_counter_ = 0;   // Counter for the number of setpoints sent
+    float test_counter_ = 0;                 // TODO delete
+    State current_state_;                    // Current state machine state
     // Vehicle position from fmu/out/vehicle_odometry -> Init to all zeros
     geometry_msgs::msg::Point vehicle_position_ = geometry_msgs::msg::Point{};
     std::vector<geometry_msgs::msg::Point> waypoints_;
@@ -158,8 +158,8 @@ private:
     {
         px4_msgs::msg::OffboardControlMode msg{};
         msg.position = true;
-        msg.velocity = false;
-        msg.acceleration = false;
+        msg.velocity = true;
+        msg.acceleration = true;
         msg.attitude = false;
         msg.body_rate = false;
         msg.timestamp = get_clock()->now().nanoseconds() / 1000;
@@ -185,7 +185,7 @@ private:
         px4_msgs::msg::TrajectorySetpoint msg{};
         msg.position = position; // (x: North, y: East, z: Down) - (Go up -z)
         msg.velocity = velocity;
-        // msg.acceleration = {0.0, 0.0, 0.0};
+        msg.acceleration = {0.1, 0.1, 0.1};
         msg.yaw = yaw; // [-PI:PI]
         msg.yawspeed = 0.174533; // [rad/s] -> 10 [Deg/s]
         msg.timestamp = get_clock()->now().nanoseconds() / 1000;
@@ -329,7 +329,10 @@ private:
         {
             publish_offboard_control_mode();
             // Take-off and hover at 5[m]
-            publish_trajectory_setpoint({0.0, 0.0, -5.0}, {1.0, 1.0, 1.0}, M_PI_2);
+            publish_trajectory_setpoint({static_cast<float>(waypoints_.at(0).x), 
+                                         static_cast<float>(waypoints_.at(0).y),
+                                         static_cast<float>(waypoints_.at(0).z)},
+                                         {0.1, 0.1, 0.1}, M_PI_2);
 
             if (offboard_setpoint_counter_ >= 200) {
                 // Change to off-board mode after 200 setpoints
@@ -360,7 +363,7 @@ private:
             publish_trajectory_setpoint({static_cast<float>(waypoints_.at(0).x), 
                                          static_cast<float>(waypoints_.at(0).y),
                                          static_cast<float>(waypoints_.at(0).z)},
-                                         {1.0, 1.0, 1.0}, M_PI_2);
+                                         {0.1, 0.1, 0.1}, M_PI_2);
 
             // Check if the setpoint has been reached in a specified tolerance
             if (reached_setpoint(waypoints_.at(0), vehicle_position_, 2.0))
@@ -391,10 +394,15 @@ private:
             // Off-board control mode
             publish_offboard_control_mode();
             // Move 5[m] forward
-            publish_trajectory_setpoint({static_cast<float>(waypoints_.at(1).x), 
+            publish_trajectory_setpoint({static_cast<float>(waypoints_.at(1).x),
                                          static_cast<float>(waypoints_.at(1).y),
                                          static_cast<float>(waypoints_.at(1).z)},
-                                         {1.0, 1.0, 1.0}, M_PI_2);
+                                         {0.1, 0.1, 0.1}, M_PI_2);
+
+                                        //  static_cast<float>(test_counter_/100.0)
+
+            // Increment counter
+            test_counter_++;
 
             // Check if the setpoint has been reached in a specified tolerance
             if (reached_setpoint(waypoints_.at(1), vehicle_position_, 2.0))
@@ -428,7 +436,7 @@ private:
             publish_trajectory_setpoint({static_cast<float>(waypoints_.at(2).x), 
                                          static_cast<float>(waypoints_.at(2).y),
                                          static_cast<float>(waypoints_.at(2).z)},
-                                         {1.0, 1.0, 1.0}, M_PI_2);
+                                         {0.1, 0.1, 0.1}, M_PI_2);
 
             // Check if the setpoint has been reached in a specified tolerance
             if (reached_setpoint(waypoints_.at(2), vehicle_position_, 2.0))
@@ -462,7 +470,7 @@ private:
             publish_trajectory_setpoint({static_cast<float>(waypoints_.at(3).x), 
                                          static_cast<float>(waypoints_.at(3).y),
                                          static_cast<float>(waypoints_.at(3).z)},
-                                         {1.0, 1.0, 1.0}, M_PI_2);
+                                         {0.1, 0.1, 0.1}, M_PI_2);
 
             // Check if the setpoint has been reached in a specified tolerance
             if (reached_setpoint(waypoints_.at(3), vehicle_position_, 2.0))
@@ -496,7 +504,7 @@ private:
             publish_trajectory_setpoint({static_cast<float>(waypoints_.at(4).x), 
                                          static_cast<float>(waypoints_.at(4).y),
                                          static_cast<float>(waypoints_.at(4).z)},
-                                         {1.0, 1.0, 1.0}, M_PI_2);
+                                         {0.1, 0.1, 0.1}, M_PI_2);
 
             // Check if the setpoint has been reached in a specified tolerance
             if (reached_setpoint(waypoints_.at(4), vehicle_position_, 2.0))
