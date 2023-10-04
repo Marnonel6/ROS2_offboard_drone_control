@@ -418,21 +418,21 @@ private:
             // Off-board control mode
             publish_offboard_control_mode();
             // Loop through path and command drone to each point
-            // NOTE TODO this makes the state machine stuck here until the for loop is done
-            //           maybe either publish single points from the path planning node or
-            //           have a global counter to index f2c_path_
-            // for (size_t i; i<f2c_path_.poses.size(); i++)
-            // {
             if (flag_next_waypoint_)
             {
                 // Publish path waypoint
+                tf2::Quaternion tf_q;
+                tf2::fromMsg(f2c_path_.poses.at(global_i_).pose.orientation, tf_q);
+                tf2::Matrix3x3 m(tf_q);
+                double roll, pitch, yaw_setpoint;
+                m.getRPY(roll, pitch, yaw_setpoint);
                 publish_trajectory_setpoint({static_cast<float>(f2c_path_.poses.at(global_i_).pose.position.x),
                                              static_cast<float>(f2c_path_.poses.at(global_i_).pose.position.y),
                                              static_cast<float>(f2c_path_.poses.at(global_i_).pose.position.z)},
-                                             {0.1, 0.1, 0.1}, M_PI_2);
-                RCLCPP_INFO(get_logger(), "x: %f     y: %f     z: %f", static_cast<float>(f2c_path_.poses.at(global_i_).pose.position.x),
-                                                                       static_cast<float>(f2c_path_.poses.at(global_i_).pose.position.y),
-                                                                       static_cast<float>(f2c_path_.poses.at(global_i_).pose.position.z));
+                                             {0.1, 0.1, 0.1}, yaw_setpoint);
+                // RCLCPP_INFO(get_logger(), "x: %f     y: %f     z: %f", static_cast<float>(f2c_path_.poses.at(global_i_).pose.position.x),
+                //                                                        static_cast<float>(f2c_path_.poses.at(global_i_).pose.position.y),
+                //                                                        static_cast<float>(f2c_path_.poses.at(global_i_).pose.position.z));
                 // Do not send next waypoint until the waypoint have been reached
                 flag_next_waypoint_ = false;
             } else
@@ -443,7 +443,7 @@ private:
                     // nonBlockingWait timer
                     if (!has_executed_)
                     {
-                        nonBlockingWait(milliseconds(10)); 
+                        nonBlockingWait(milliseconds(10));
                         has_executed_ = true;
                     }
 

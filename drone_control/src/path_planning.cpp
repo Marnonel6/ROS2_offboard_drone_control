@@ -118,8 +118,9 @@ private:
         // Use Fields2Cover
         // Define field and robot
         F2CRobot robot (2.0, 4.0);
-        F2CCells field(F2CCell(F2CLinearRing({F2CPoint(0,0,-5), F2CPoint(0,40,-5), F2CPoint(20,40,-5),
-                                              F2CPoint(20,0,-5), F2CPoint(0,0,-5)})));
+        // NOTE: The z-height that is specified here gets halved in the path for some reason
+        F2CCells field(F2CCell(F2CLinearRing({F2CPoint(0,0,-10), F2CPoint(0,20,-10), F2CPoint(10,20,-10),
+                                              F2CPoint(10,0,-10), F2CPoint(0,0,-10)})));
         // Swath generation
         f2c::sg::BruteForce bf;
         f2c::obj::NSwath n_swath_obj;
@@ -132,20 +133,19 @@ private:
         // Create swath connections using Dubins curves with Continuous curvature
         f2c::pp::DubinsCurvesCC dubins_cc;
         F2CPath path_dubins_cc = path_planner.searchBestPath(robot, boustrophedon_swaths, dubins_cc);
-        // Discretize swath lines in path object
-        // Specify the step size for the swath section
-        // TODO NOTE ADD BACK IN AND MAKE WORK
+        // Discretize the turns -> Specify significant number precision
+        path_dubins_cc.serializePath(3);
+        // Discretize swath lines in path object -> Specify the step size for the swath section
         double discretize_step_size = 0.5; // Step size for discretization in [m]
         F2CPath new_path = path_dubins_cc.discretize_swath(discretize_step_size);
         // Save to file
-        // new_path.saveToFile("discretized_swath_path.csv", 4); // Specify precision to the significant number
+        // new_path.saveToFile("discretized_swath_path.csv", 3); // Specify precision to the significant number
         // Visualize
         f2c::Visualizer::figure();
         f2c::Visualizer::plot(field);
-        // f2c::Visualizer::plot(no_hl);
         f2c::Visualizer::plot(new_path);
         f2c::Visualizer::plot(boustrophedon_swaths);
-        // f2c::Visualizer::show();
+        f2c::Visualizer::show();
 
         return new_path;
     }
