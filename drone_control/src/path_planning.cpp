@@ -73,12 +73,14 @@ public:
         // Path planning with Fields2Cover
         f2c_path_ = path_planning();
         // Convert Fields2Cover path to a nav_msg::msg::path format
+        path_.header.frame_id = "/map";
+        path_.header.stamp = rclcpp::Node::now();;
         f2cpath_to_navpath(path_, f2c_path_);
 
         // Initialize variables
 
         // Create publishers
-        path_publisher_ = create_publisher<nav_msgs::msg::Path>("/path", 10);
+        path_publisher_ = create_publisher<nav_msgs::msg::Path>("/f2c_path", 10);
 
         // Create subscribers
 
@@ -116,8 +118,8 @@ private:
         // Use Fields2Cover
         // Define field and robot
         F2CRobot robot (2.0, 4.0);
-        F2CCells field(F2CCell(F2CLinearRing({F2CPoint(0,0), F2CPoint(0,40), F2CPoint(20,40),
-                                              F2CPoint(20,0), F2CPoint(0,0)})));
+        F2CCells field(F2CCell(F2CLinearRing({F2CPoint(0,0,-5), F2CPoint(0,40,-5), F2CPoint(20,40,-5),
+                                              F2CPoint(20,0,-5), F2CPoint(0,0,-5)})));
         // Swath generation
         f2c::sg::BruteForce bf;
         f2c::obj::NSwath n_swath_obj;
@@ -133,7 +135,7 @@ private:
         // Discretize swath lines in path object
         // Specify the step size for the swath section
         // TODO NOTE ADD BACK IN AND MAKE WORK
-        double discretize_step_size = 30; // Step size for discretization in [m]
+        double discretize_step_size = 0.5; // Step size for discretization in [m]
         F2CPath new_path = path_dubins_cc.discretize_swath(discretize_step_size);
         // Save to file
         // new_path.saveToFile("discretized_swath_path.csv", 4); // Specify precision to the significant number

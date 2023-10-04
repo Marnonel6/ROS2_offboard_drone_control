@@ -28,5 +28,11 @@ def generate_launch_description():
              executable='drone_control',
              output='screen',
              shell=True,
-            )
+            ),
+        Node(
+             package='drone_control',
+             executable='path_planning',
+             output='screen',
+             shell=True,
+            ),
     ])

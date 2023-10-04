@@ -14,6 +14,8 @@
 // ROS2 libs
 #include <rclcpp/rclcpp.hpp>
 #include "geometry_msgs/msg/point.hpp"
+#include "nav_msgs/msg/path.hpp"
+#include <tf2_geometry_msgs/tf2_geometry_msgs.hpp>
 // PX4 libs
 #include <px4_msgs/msg/offboard_control_mode.hpp>
 #include <px4_msgs/msg/trajectory_setpoint.hpp>
@@ -28,6 +30,7 @@ using namespace std::chrono_literals;
 enum class State {
     IDLE,
     OFFBOARD,
+    MISSION,
     MISSION1,
     MISSION2,
     MISSION3,
@@ -95,6 +98,11 @@ public:
             "/fmu/out/vehicle_odometry", qos, std::bind(&DroneControl::vehicle_odometry_callback,
             this, std::placeholders::_1)
         );
+        path_subscriber_ = create_subscription<nav_msgs::msg::Path>(
+            "/f2c_path", qos, std::bind(&DroneControl::path_callback,
+            this, std::placeholders::_1)
+        );
+
 
         // Create timer
         timer_ = create_wall_timer(milliseconds(1000 / frequency),
@@ -109,11 +117,14 @@ private:
     // Vehicle position from fmu/out/vehicle_odometry -> Init to all zeros
     geometry_msgs::msg::Point vehicle_position_ = geometry_msgs::msg::Point{};
     std::vector<geometry_msgs::msg::Point> waypoints_;
+    nav_msgs::msg::Path f2c_path_; // Fields2Cover path
+    size_t global_i_ = 0; // global counter for f2c_path_
 
     // Flags
     mutable std::mutex mutex_; // Used in the Non-block wait thread timer
     bool flag_timer_done_ = false;
     bool has_executed_ = false;  // Flag to check if the code has executed before
+    bool flag_next_waypoint_ = true; // Send the next waypoint in path
 
     //
     // TODO waypoint should be read in from a .json
@@ -130,6 +141,7 @@ private:
     rclcpp::Publisher<px4_msgs::msg::TrajectorySetpoint>::SharedPtr trajectory_setpoint_publisher_;
     rclcpp::Publisher<px4_msgs::msg::VehicleCommand>::SharedPtr vehicle_command_publisher_;
     rclcpp::Subscription<px4_msgs::msg::VehicleOdometry>::SharedPtr vehicle_odometry_subscriber_;
+    rclcpp::Subscription<nav_msgs::msg::Path>::SharedPtr path_subscriber_;
 
     /**
      * @brief Vehicle odometry subscriber callback
@@ -149,6 +161,16 @@ private:
         vehicle_position_.x = static_cast<double>(msg->position[0]);
         vehicle_position_.y = static_cast<double>(msg->position[1]);
         vehicle_position_.z = static_cast<double>(msg->position[2]);
+    }
+
+    /**
+     * @brief Fields2Cover path from path_planning node
+     *
+    */
+    void path_callback(const nav_msgs::msg::Path msg)
+    {
+        // Save Fields2Cover path
+        f2c_path_ = msg;
     }
 
     ///
@@ -253,9 +275,9 @@ private:
 
     /**
      * @brief Non-blocking timer counter thread. This will change the flag: Flag_timer_done = True
-     * @param duration Time to sleep in seconds
+     * @param duration Time to sleep in milliseconds
     */
-    void nonBlockingWait(std::chrono::seconds duration)
+    void nonBlockingWait(std::chrono::milliseconds duration)
     {
         std::thread([this, duration]() {
             std::this_thread::sleep_for(duration);
@@ -269,7 +291,7 @@ private:
                 flag_timer_done_ = true;
             }
 
-            RCLCPP_INFO(rclcpp::get_logger("non_blocking_wait_thread"), "Waited for %ld seconds.", duration.count());
+            // RCLCPP_INFO(rclcpp::get_logger("non_blocking_wait_thread"), "Waited for %ld seconds.", duration.count());
         }).detach();
     }
 
@@ -379,8 +401,10 @@ private:
                 if (flag_timer_done_)
                 {
                     // Change state to MISSION1
-                    current_state_ = State::MISSION1;
-                    RCLCPP_INFO(get_logger(), "State transitioned to MISSION1");
+                    // current_state_ = State::MISSION1;
+                    // RCLCPP_INFO(get_logger(), "State transitioned to MISSION1");
+                    current_state_ = State::MISSION;
+                    RCLCPP_INFO(get_logger(), "State transitioned to MISSION with Fields2Cover path");
 
                     // Reset flags
                     flag_timer_done_ = false;
@@ -388,6 +412,64 @@ private:
                 }
             }
         }
+        // Mission path with Fields2Cover
+        else if (current_state_ == State::MISSION)
+        {
+            // Off-board control mode
+            publish_offboard_control_mode();
+            // Loop through path and command drone to each point
+            // NOTE TODO this makes the state machine stuck here until the for loop is done
+            //           maybe either publish single points from the path planning node or
+            //           have a global counter to index f2c_path_
+            // for (size_t i; i<f2c_path_.poses.size(); i++)
+            // {
+            if (flag_next_waypoint_)
+            {
+                // Publish path waypoint
+                publish_trajectory_setpoint({static_cast<float>(f2c_path_.poses.at(global_i_).pose.position.x),
+                                             static_cast<float>(f2c_path_.poses.at(global_i_).pose.position.y),
+                                             static_cast<float>(f2c_path_.poses.at(global_i_).pose.position.z)},
+                                             {0.1, 0.1, 0.1}, M_PI_2);
+                RCLCPP_INFO(get_logger(), "x: %f     y: %f     z: %f", static_cast<float>(f2c_path_.poses.at(global_i_).pose.position.x),
+                                                                       static_cast<float>(f2c_path_.poses.at(global_i_).pose.position.y),
+                                                                       static_cast<float>(f2c_path_.poses.at(global_i_).pose.position.z));
+                // Do not send next waypoint until the waypoint have been reached
+                flag_next_waypoint_ = false;
+            } else
+            {
+                // Check if the setpoint has been reached in a specified tolerance
+                if (reached_setpoint(f2c_path_.poses.at(global_i_).pose.position, vehicle_position_, 2.0))
+                {
+                    // nonBlockingWait timer
+                    if (!has_executed_)
+                    {
+                        nonBlockingWait(milliseconds(10)); 
+                        has_executed_ = true;
+                    }
+
+                    // Wait until nonBlockingWait is done
+                    if (flag_timer_done_)
+                    {
+                        // RCLCPP_INFO(get_logger(), static_cast<char>(global_i_));
+
+                        // Reset flags
+                        flag_timer_done_ = false;
+                        has_executed_ = false;
+                        flag_next_waypoint_ = true;
+                        global_i_++; // Increment waypoint number
+
+                        // Land when path is done
+                        if (global_i_ >= f2c_path_.poses.size())
+                        {
+                            current_state_ = State::LAND;
+                            RCLCPP_INFO(get_logger(), "State transitioned to LAND");
+                        }
+                    }
+                }
+            }
+        }
+
+
         // MISSION1 state
         else if (current_state_ == State::MISSION1)
         {
