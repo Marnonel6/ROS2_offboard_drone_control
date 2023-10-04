@@ -103,7 +103,6 @@ public:
             this, std::placeholders::_1)
         );
 
-
         // Create timer
         timer_ = create_wall_timer(milliseconds(1000 / frequency),
                                    std::bind(&DroneControl::timer_callback, this));
@@ -119,6 +118,7 @@ private:
     std::vector<geometry_msgs::msg::Point> waypoints_;
     nav_msgs::msg::Path f2c_path_; // Fields2Cover path
     size_t global_i_ = 0; // global counter for f2c_path_
+    double position_tolerance_ = 1.0; // [m]
 
     // Flags
     mutable std::mutex mutex_; // Used in the Non-block wait thread timer
@@ -253,6 +253,15 @@ private:
     }
 
     /**
+     * @brief Send a command to Land the vehicle
+     */
+    void land()
+    {
+        publish_vehicle_command(px4_msgs::msg::VehicleCommand::VEHICLE_CMD_NAV_LAND);
+        RCLCPP_INFO(get_logger(), "Land command send");
+    }
+
+    /**
      * @brief Publish vehicle commands
      * @param command   Command code (matches VehicleCommand and MAVLink MAV_CMD codes)
      * @param param1    Command parameter 1
@@ -295,20 +304,11 @@ private:
         }).detach();
     }
 
-    // // Call this in your main program or another function to check if the time has passed
-    // bool hasTimePassed() const
-    // {
-    //     std::lock_guard<std::mutex> lock(mutex_);
-    //     return flag_timer_done_;
-    // }
-
-
     ///
     ///
     /// LIBRARY functions later!!
     ///
     ///
-
     /**
      * @brief Calculate 3D Euclidean distance
      * @param v1 First 3D point
@@ -336,6 +336,15 @@ private:
     {
         // std::cout << "Euclidean distance: " << std::abs(euclidean_distance(v1, v2)) << std::endl;
         return std::abs(euclidean_distance(v1, v2)) <= tolerance;
+    }
+
+    /**
+     * @brief Convert degrees to radians
+     * @param degrees Angle in [Deg]
+     * @return Angle in radians
+    */
+    double degreesToRadians(double degrees) {
+        return degrees * (M_PI / 180.0);
     }
     ///
     ///
@@ -438,7 +447,9 @@ private:
             } else
             {
                 // Check if the setpoint has been reached in a specified tolerance
-                if (reached_setpoint(f2c_path_.poses.at(global_i_).pose.position, vehicle_position_, 2.0))
+                // TODO CHECK IF YAW POSITION IS CLOSE ENOUGH AS WELL
+                if (reached_setpoint(f2c_path_.poses.at(global_i_).pose.position, vehicle_position_,
+                                     position_tolerance_))
                 {
                     // nonBlockingWait timer
                     if (!has_executed_)
@@ -617,6 +628,7 @@ private:
             // TODO actually add code for landing noo it will just timeout as I'm not sending
             // off-board control anymore.
             RCLCPP_INFO(get_logger(), "LANDING ...");
+            land();
         }
     }
 };
