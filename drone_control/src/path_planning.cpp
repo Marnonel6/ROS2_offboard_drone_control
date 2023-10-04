@@ -119,7 +119,7 @@ private:
         // Define field and robot
         F2CRobot robot (2.0, 4.0);
         // NOTE: The z-height that is specified here gets halved in the path for some reason
-        F2CCells field(F2CCell(F2CLinearRing({F2CPoint(0,0,-10), F2CPoint(0,20,-10), F2CPoint(10,20,-10),
+        F2CCells field(F2CCell(F2CLinearRing({F2CPoint(0,0,-10), F2CPoint(0,10,-10), F2CPoint(10,10,-10),
                                               F2CPoint(10,0,-10), F2CPoint(0,0,-10)})));
         // Swath generation
         f2c::sg::BruteForce bf;

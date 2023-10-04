@@ -125,6 +125,7 @@ private:
     bool flag_timer_done_ = false;
     bool has_executed_ = false;  // Flag to check if the code has executed before
     bool flag_next_waypoint_ = true; // Send the next waypoint in path
+    bool flag_mission_ = false; // Flag that turns true if a mission is ready
 
     //
     // TODO waypoint should be read in from a .json
@@ -171,6 +172,7 @@ private:
     {
         // Save Fields2Cover path
         f2c_path_ = msg;
+        flag_mission_ = true;
     }
 
     ///
@@ -365,7 +367,7 @@ private:
                                          static_cast<float>(waypoints_.at(0).z)},
                                          {0.1, 0.1, 0.1}, M_PI_2);
 
-            if (offboard_setpoint_counter_ >= 200) {
+            if (offboard_setpoint_counter_ >= 200 && flag_mission_) {
                 // Change to off-board mode after 200 setpoints
                 publish_vehicle_command(px4_msgs::msg::VehicleCommand::VEHICLE_CMD_DO_SET_MODE, 1, 6);
 
@@ -439,15 +441,10 @@ private:
                                              static_cast<float>(f2c_path_.poses.at(global_i_).pose.position.y),
                                              static_cast<float>(f2c_path_.poses.at(global_i_).pose.position.z)},
                                              {0.1, 0.1, 0.1}, yaw_setpoint);
-                // RCLCPP_INFO(get_logger(), "x: %f     y: %f     z: %f", static_cast<float>(f2c_path_.poses.at(global_i_).pose.position.x),
-                //                                                        static_cast<float>(f2c_path_.poses.at(global_i_).pose.position.y),
-                //                                                        static_cast<float>(f2c_path_.poses.at(global_i_).pose.position.z));
-                // Do not send next waypoint until the waypoint have been reached
                 flag_next_waypoint_ = false;
             } else
             {
                 // Check if the setpoint has been reached in a specified tolerance
-                // TODO CHECK IF YAW POSITION IS CLOSE ENOUGH AS WELL
                 if (reached_setpoint(f2c_path_.poses.at(global_i_).pose.position, vehicle_position_,
                                      position_tolerance_))
                 {
@@ -461,8 +458,6 @@ private:
                     // Wait until nonBlockingWait is done
                     if (flag_timer_done_)
                     {
-                        // RCLCPP_INFO(get_logger(), static_cast<char>(global_i_));
-
                         // Reset flags
                         flag_timer_done_ = false;
                         has_executed_ = false;
