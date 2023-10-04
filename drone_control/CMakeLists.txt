@@ -18,6 +18,8 @@ find_package(px4_msgs REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(sensor_msgs REQUIRED)
 find_package(Fields2Cover REQUIRED)
+find_package(nav_msgs REQUIRED)
+find_package(tf2_geometry_msgs REQUIRED)
 
 #################
 # Setup targets #
@@ -25,29 +27,29 @@ find_package(Fields2Cover REQUIRED)
 
 # Drone control node
 add_executable(drone_control src/drone_control.cpp)
-ament_target_dependencies(drone_control rclcpp px4_msgs geometry_msgs Fields2Cover)
+ament_target_dependencies(drone_control rclcpp px4_msgs geometry_msgs)
 install(TARGETS drone_control DESTINATION lib/${PROJECT_NAME})
-
-
 
 # Path planning node
 add_executable(path_planning src/path_planning.cpp)
 target_link_libraries(path_planning Fields2Cover) # Link Fields2Cover library
-ament_target_dependencies(path_planning rclcpp geometry_msgs Fields2Cover)
+ament_target_dependencies(path_planning rclcpp geometry_msgs Fields2Cover nav_msgs
+                          tf2_geometry_msgs)
 install(TARGETS path_planning DESTINATION lib/${PROJECT_NAME})
 
-target_include_directories(drone_control PUBLIC
-    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-    $<INSTALL_INTERFACE:include>)
-target_compile_features(drone_control PUBLIC c_std_99 cxx_std_17)  # Require C99 and C++17
-
+# target_include_directories(drone_control PUBLIC
+#     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+#     $<INSTALL_INTERFACE:include>)
+# target_compile_features(drone_control PUBLIC c_std_99 cxx_std_17)  # Require C99 and C++17
 
 ############
 # Install ##
 ############
 
 # Export information to downstream packages
-ament_export_dependencies(ament_cmake rclcpp rosidl_default_runtime eigen3_cmake_module Eigen3 px4_msgs geometry_msgs sensor_msgs Fields2Cover)
+ament_export_dependencies(ament_cmake rclcpp rosidl_default_runtime eigen3_cmake_module Eigen3
+                          px4_msgs geometry_msgs sensor_msgs Fields2Cover nav_msgs
+                          tf2_geometry_msgs)
 
 ament_export_include_directories(include)
 

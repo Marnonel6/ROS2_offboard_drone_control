@@ -20,6 +20,8 @@
   <depend>launch_testing</depend>
   <depend>launch_testing_ros</depend>
   <depend>Fields2Cover</depend>
+  <depend>nav_msgs</depend>
+  <depend>tf2_geometry_msgs</depend>
 
   <exec_depend>rosidl_default_runtime</exec_depend>
   <exec_depend>ros2launch</exec_depend>
