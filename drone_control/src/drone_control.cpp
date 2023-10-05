@@ -58,26 +58,10 @@ public:
         //
         // TODO waypoint should be read in from a .json
         //
-        // Up
+        // Hover at 5[m]
         waypoint_0_.z = -5;
-        // Forward
-        waypoint_1_.y = 5;
-        waypoint_1_.z = -5;
-        // Left
-        waypoint_2_.x = 5;
-        waypoint_2_.y = 5;
-        waypoint_2_.z = -5;
-        // Back
-        waypoint_3_.x = 5;
-        waypoint_3_.z = -5;
-        // Home
-        waypoint_4_.z = -5;
         // Add all waypoint to the vector
         waypoints_.push_back(waypoint_0_);
-        waypoints_.push_back(waypoint_1_);
-        waypoints_.push_back(waypoint_2_);
-        waypoints_.push_back(waypoint_3_);
-        waypoints_.push_back(waypoint_4_);
 
         // Initialize variables
         current_state_ = State::IDLE;
@@ -129,10 +113,6 @@ private:
     // TODO waypoint should be read in from a .json
     //
     geometry_msgs::msg::Point waypoint_0_ = geometry_msgs::msg::Point{};
-    geometry_msgs::msg::Point waypoint_1_ = geometry_msgs::msg::Point{};
-    geometry_msgs::msg::Point waypoint_2_ = geometry_msgs::msg::Point{};
-    geometry_msgs::msg::Point waypoint_3_ = geometry_msgs::msg::Point{};
-    geometry_msgs::msg::Point waypoint_4_ = geometry_msgs::msg::Point{};
 
     // Create objects
     rclcpp::TimerBase::SharedPtr timer_;
@@ -148,14 +128,6 @@ private:
     */
     void vehicle_odometry_callback(const px4_msgs::msg::VehicleOdometry::UniquePtr msg)
     {
-        // std::cout << "\n\n\n";
-        // std::cout << "RECEIVED VEHICLE ODOMETRY DATA"   << std::endl;
-        // std::cout << "=============================="   << std::endl;
-        // std::cout << "timestamp: " << msg->timestamp    << std::endl;
-        // std::cout << "position[0] North: " << msg->position[0]  << std::endl;
-        // std::cout << "position[1] East: " << msg->position[1]  << std::endl;
-        // std::cout << "position[2] Down: " << msg->position[2]  << std::endl;
-
         // Set vehicle position
         vehicle_position_.x = static_cast<double>(msg->position[0]);
         vehicle_position_.y = static_cast<double>(msg->position[1]);
@@ -173,9 +145,10 @@ private:
         flag_mission_ = true;
     }
 
-    ///
-    /// \brief Publish the off-board control mode.
-    ///        Only position and altitude controls are active.
+    /**
+     * \brief Publish the off-board control mode.
+     *        Only position and altitude controls are active.
+    */
     void publish_offboard_control_mode()
     {
         px4_msgs::msg::OffboardControlMode msg{};
@@ -231,9 +204,9 @@ private:
         //     msg.velocity_frame = 0;
     }
 
-    ///
-    /// \brief Send a command to Arm the drone
-    ///
+    /**
+     * \brief Send a command to Arm the drone
+    */
     void arm()
     {
         publish_vehicle_command(px4_msgs::msg::VehicleCommand::VEHICLE_CMD_COMPONENT_ARM_DISARM,
@@ -412,7 +385,7 @@ private:
     /// \brief Main control timer loop
     void timer_callback()
     {
-        // IDLE state
+        // IDLE state -> ARM and Set OFFBOARD mode
         if (current_state_ == State::IDLE)
         {
             publish_offboard_control_mode();
@@ -443,7 +416,7 @@ private:
             // Increment setpoint counter
             offboard_setpoint_counter_++;
         }
-        // OFFBOARD state
+        // OFFBOARD state -> Take-off and hover at 5m
         else if (current_state_ == State::OFFBOARD)
         {
             // Off-board control mode
@@ -467,9 +440,7 @@ private:
                 // Wait until nonBlockingWait is done
                 if (flag_timer_done_)
                 {
-                    // Change state to MISSION1
-                    // current_state_ = State::MISSION1;
-                    // RCLCPP_INFO(get_logger(), "State transitioned to MISSION1");
+                    // Change state to MISSION
                     current_state_ = State::MISSION;
                     RCLCPP_INFO(get_logger(), "State transitioned to MISSION with Fields2Cover path");
 
