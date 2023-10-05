@@ -64,8 +64,6 @@ public:
         waypoints_.push_back(waypoint_0_);
 
         // Initialize variables
-        current_state_ = State::IDLE;
-        RCLCPP_INFO(get_logger(), "State transitioned to IDLE");
 
         // Create publishers
         offboard_control_publisher_ = create_publisher<px4_msgs::msg::OffboardControlMode>(
@@ -94,7 +92,7 @@ private:
     // Variables
     size_t offboard_setpoint_counter_ = 0;   // Counter for the number of setpoints sent
     float test_counter_ = 0;                 // TODO delete
-    State current_state_;                    // Current state machine state
+    State current_state_ = State::IDLE;      // Current state machine state
     // Vehicle position from fmu/out/vehicle_odometry -> Init to all zeros
     geometry_msgs::msg::Point vehicle_position_ = geometry_msgs::msg::Point{};
     std::vector<geometry_msgs::msg::Point> waypoints_;
@@ -385,136 +383,134 @@ private:
     /// \brief Main control timer loop
     void timer_callback()
     {
-        // IDLE state -> ARM and Set OFFBOARD mode
-        if (current_state_ == State::IDLE)
+        switch (current_state_)
         {
-            publish_offboard_control_mode();
-            // Take-off and hover at 5[m]
-            // TODO change to take-off 5m above CURRENT position
-            publish_trajectory_setpoint({static_cast<float>(waypoints_.at(0).x), 
-                                         static_cast<float>(waypoints_.at(0).y),
-                                         static_cast<float>(waypoints_.at(0).z)},
-                                         {0.1, 0.1, 0.1}, M_PI_2);
+            // IDLE state -> ARM and Set OFFBOARD mode
+            case State::IDLE:
+                publish_offboard_control_mode();
+                // Take-off and hover at 5[m]
+                // TODO change to take-off 5m above CURRENT position
+                publish_trajectory_setpoint({static_cast<float>(waypoints_.at(0).x), 
+                                            static_cast<float>(waypoints_.at(0).y),
+                                            static_cast<float>(waypoints_.at(0).z)},
+                                            {0.1, 0.1, 0.1}, M_PI_2);
 
-            if (offboard_setpoint_counter_ >= 200 && flag_mission_) {
-                // Change to off-board mode after 200 setpoints
-                publish_vehicle_command(px4_msgs::msg::VehicleCommand::VEHICLE_CMD_DO_SET_MODE, 1, 6);
+                if (offboard_setpoint_counter_ >= 200 && flag_mission_) {
+                    // Change to off-board mode after 200 setpoints
+                    // TODO WHY DO I HAVE TO DO THIS AND DO I NEED TO ADD THIS TO OTHERS
+                    publish_vehicle_command(px4_msgs::msg::VehicleCommand::VEHICLE_CMD_DO_SET_MODE, 1, 6);
 
-                RCLCPP_INFO_STREAM(get_logger(), "Sent Vehicle Command");
+                    RCLCPP_INFO_STREAM(get_logger(), "Sent Vehicle Command");
 
-                // Arm the vehicle
-                arm();
+                    // Arm the vehicle
+                    arm();
 
-                // TODO Check if state transitioned to offboard and armed an only then change state
-                //      otherwise arm again
+                    // TODO Check if state transitioned to offboard and armed an only then change state
+                    //      otherwise arm again
 
-                // Change state to OFFBOARD
-                current_state_ = State::OFFBOARD;
-                RCLCPP_INFO(get_logger(), "State transitioned to OFFBOARD");
-            }
-
-            // Increment setpoint counter
-            offboard_setpoint_counter_++;
-        }
-        // OFFBOARD state -> Take-off and hover at 5m
-        else if (current_state_ == State::OFFBOARD)
-        {
-            // Off-board control mode
-            publish_offboard_control_mode();
-            // Take-off and hover at 5[m]
-            publish_trajectory_setpoint({static_cast<float>(waypoints_.at(0).x), 
-                                         static_cast<float>(waypoints_.at(0).y),
-                                         static_cast<float>(waypoints_.at(0).z)},
-                                         {0.1, 0.1, 0.1}, M_PI_2);
-
-            // Check if the setpoint has been reached in a specified tolerance
-            if (reached_setpoint(waypoints_.at(0), vehicle_position_, 2.0))
-            {
-                // nonBlockingWait timer
-                if (!has_executed_)
-                {
-                    nonBlockingWait(seconds(5)); 
-                    has_executed_ = true;
+                    // Change state to OFFBOARD
+                    current_state_ = State::OFFBOARD;
+                    RCLCPP_INFO(get_logger(), "State transitioned to OFFBOARD");
                 }
 
-                // Wait until nonBlockingWait is done
-                if (flag_timer_done_)
-                {
-                    // Change state to MISSION
-                    current_state_ = State::MISSION;
-                    RCLCPP_INFO(get_logger(), "State transitioned to MISSION with Fields2Cover path");
+                // Increment setpoint counter
+                offboard_setpoint_counter_++;
+                break;
+            // OFFBOARD state -> Take-off and hover at 5m
+            case State::OFFBOARD:
+                // Off-board control mode
+                publish_offboard_control_mode();
+                // Take-off and hover at 5[m]
+                publish_trajectory_setpoint({static_cast<float>(waypoints_.at(0).x), 
+                                            static_cast<float>(waypoints_.at(0).y),
+                                            static_cast<float>(waypoints_.at(0).z)},
+                                            {0.1, 0.1, 0.1}, M_PI_2);
 
-                    // Reset flags
-                    flag_timer_done_ = false;
-                    has_executed_ = false;
-                }
-            }
-        }
-        // Mission path with Fields2Cover
-        else if (current_state_ == State::MISSION)
-        {
-            // Off-board control mode
-            publish_offboard_control_mode();
-            // Loop through path and command drone to each point
-            if (flag_next_waypoint_)
-            {
-                // Publish path waypoint
-                tf2::Quaternion tf_q;
-                tf2::fromMsg(f2c_path_.poses.at(global_i_).pose.orientation, tf_q);
-                tf2::Matrix3x3 m(tf_q);
-                double roll, pitch, yaw_setpoint;
-                m.getRPY(roll, pitch, yaw_setpoint);
-                publish_trajectory_setpoint({static_cast<float>(f2c_path_.poses.at(global_i_).pose.position.x),
-                                             static_cast<float>(f2c_path_.poses.at(global_i_).pose.position.y),
-                                             static_cast<float>(f2c_path_.poses.at(global_i_).pose.position.z)},
-                                             {0.1, 0.1, 0.1}, yaw_setpoint);
-                flag_next_waypoint_ = false;
-            } else
-            {
                 // Check if the setpoint has been reached in a specified tolerance
-                if (reached_setpoint(f2c_path_.poses.at(global_i_).pose.position, vehicle_position_,
-                                     position_tolerance_))
+                if (reached_setpoint(waypoints_.at(0), vehicle_position_, 2.0))
                 {
                     // nonBlockingWait timer
                     if (!has_executed_)
                     {
-                        nonBlockingWait(milliseconds(10));
+                        nonBlockingWait(seconds(5)); 
                         has_executed_ = true;
                     }
 
                     // Wait until nonBlockingWait is done
                     if (flag_timer_done_)
                     {
+                        // Change state to MISSION
+                        current_state_ = State::MISSION;
+                        RCLCPP_INFO(get_logger(), "State transitioned to MISSION with Fields2Cover path");
+
                         // Reset flags
                         flag_timer_done_ = false;
                         has_executed_ = false;
-                        flag_next_waypoint_ = true;
-                        global_i_++; // Increment waypoint number
-
-                        // Land when path is done
-                        if (global_i_ >= f2c_path_.poses.size())
+                    }
+                }
+                break;
+            // Mission path with Fields2Cover
+            case State::MISSION:
+                // Off-board control mode
+                publish_offboard_control_mode();
+                // Loop through path and command drone to each point
+                if (flag_next_waypoint_)
+                {
+                    // Publish path waypoint
+                    tf2::Quaternion tf_q;
+                    tf2::fromMsg(f2c_path_.poses.at(global_i_).pose.orientation, tf_q);
+                    tf2::Matrix3x3 m(tf_q);
+                    double roll, pitch, yaw_setpoint;
+                    m.getRPY(roll, pitch, yaw_setpoint);
+                    publish_trajectory_setpoint({static_cast<float>(f2c_path_.poses.at(global_i_).pose.position.x),
+                                                static_cast<float>(f2c_path_.poses.at(global_i_).pose.position.y),
+                                                static_cast<float>(f2c_path_.poses.at(global_i_).pose.position.z)},
+                                                {0.1, 0.1, 0.1}, yaw_setpoint);
+                    flag_next_waypoint_ = false;
+                } else
+                {
+                    // Check if the setpoint has been reached in a specified tolerance
+                    if (reached_setpoint(f2c_path_.poses.at(global_i_).pose.position, vehicle_position_,
+                                        position_tolerance_))
+                    {
+                        // nonBlockingWait timer
+                        if (!has_executed_)
                         {
-                            current_state_ = State::RTL;
-                            RCLCPP_INFO(get_logger(), "State transitioned to RTL");
+                            nonBlockingWait(milliseconds(10));
+                            has_executed_ = true;
+                        }
+
+                        // Wait until nonBlockingWait is done
+                        if (flag_timer_done_)
+                        {
+                            // Reset flags
+                            flag_timer_done_ = false;
+                            has_executed_ = false;
+                            flag_next_waypoint_ = true;
+                            global_i_++; // Increment waypoint number
+
+                            // Land when path is done
+                            if (global_i_ >= f2c_path_.poses.size())
+                            {
+                                current_state_ = State::RTL;
+                                RCLCPP_INFO(get_logger(), "State transitioned to RTL");
+                            }
                         }
                     }
                 }
-            }
-        }
-        // LAND at current position state
-        else if (current_state_ == State::LAND)
-        {
-            land();
-        }
-        // Return to launch
-        else if (current_state_ == State::RTL)
-        {
-            RTL();
-        }
-        // Emergency error state
-        else if (current_state_ == State::FAIL)
-        {
-            RTL();
+                break;
+            // LAND at current position state
+            case State::LAND:
+                land();
+                break;
+            // Return to launch
+            case State::RTL:
+                RTL();
+                break;
+            // Emergency error state
+            case State::FAIL:
+                RTL();
+                break;
         }
     }
 };
