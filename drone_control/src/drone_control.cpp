@@ -31,11 +31,9 @@ enum class State {
     IDLE,
     OFFBOARD,
     MISSION,
-    MISSION1,
-    MISSION2,
-    MISSION3,
-    MISSION4,
-    LAND
+    LAND,
+    RTL,
+    FAIL
 };
 
 class DroneControl : public rclcpp::Node
@@ -255,6 +253,31 @@ private:
     }
 
     /**
+     * @brief Send take-off command
+     * 
+     * Takeoff from ground / hand
+     * Command -> VEHICLE_CMD_NAV_TAKEOFF = 12
+     * Parameters:
+     * | Minimum pitch (if airspeed sensor present), desired pitch without sensor
+     * | Empty
+     * | Empty
+     * | Yaw angle (if magnetometer present), ignored without magnetometer
+     * | Latitude [Deg * 1e7]
+     * | Longitude [Deg * 1e7]
+     * | Altitude [mm above sea level] https://www.freemaptools.com/elevation-finder.htm
+     * Reference for how Lat, Lon and Alt is calculated
+     * https://docs.px4.io/v1.12/en/advanced_config/parameter_reference.html#data-link-loss
+     * The latitude becomes approximately: 473,977,222
+     * The longitude becomes approximately: 85,456,111
+    */
+    void takeoff()
+    {
+        publish_vehicle_command(px4_msgs::msg::VehicleCommand::VEHICLE_CMD_NAV_TAKEOFF, 0,0,0,
+                               4.21, 473977222, 85456111, 570200); // 4.2, 473977445, 85455941, 488200);
+        RCLCPP_INFO(get_logger(), "Takeoff command send");
+    }
+
+    /**
      * @brief Send a command to Land the vehicle
      */
     void land()
@@ -264,16 +287,48 @@ private:
     }
 
     /**
-     * @brief Publish vehicle commands
+     * @brief Send Return to launch command
+     * 
+     * Return to launch location
+     * Command -> VEHICLE_CMD_NAV_RETURN_TO_LAUNCH = 20
+     * Parameters:
+     * |Empty
+     * |Empty
+     * |Empty
+     * |Empty
+     * |Empty
+     * |Empty
+     * |Empty
+    */
+    void RTL()
+    {
+        publish_vehicle_command(px4_msgs::msg::VehicleCommand::VEHICLE_CMD_NAV_RETURN_TO_LAUNCH);
+        RCLCPP_INFO(get_logger(), "RTL command send");
+    }
+
+    /**
+     * @brief Publish vehicle commands (https://github.com/PX4/PX4-Autopilot/blob/main/msg/VehicleCommand.msg)
      * @param command   Command code (matches VehicleCommand and MAVLink MAV_CMD codes)
-     * @param param1    Command parameter 1
-     * @param param2    Command parameter 2
+     * @param param1    Parameter 1, as defined by MAVLink uint16 VEHICLE_CMD enum.
+     * @param param2    Parameter 2, as defined by MAVLink uint16 VEHICLE_CMD enum.
+     * @param param3    Parameter 3, as defined by MAVLink uint16 VEHICLE_CMD enum.
+     * @param param4    Parameter 4, as defined by MAVLink uint16 VEHICLE_CMD enum.
+     * @param param5    Parameter 5, as defined by MAVLink uint16 VEHICLE_CMD enum.
+     * @param param6    Parameter 6, as defined by MAVLink uint16 VEHICLE_CMD enum.
+     * @param param7    Parameter 7, as defined by MAVLink uint16 VEHICLE_CMD enum.
      */
-    void publish_vehicle_command(uint16_t command, float param1 = 0.0, float param2 = 0.0)
+    void publish_vehicle_command(uint16_t command, float param1 = 0.0, float param2 = 0.0,
+                                 float param3 = 0.0, float param4 = 0.0, float param5 = 0.0,
+                                 float param6 = 0.0, float param7 = 0.0)
     {
         px4_msgs::msg::VehicleCommand msg{};
         msg.param1 = param1;
         msg.param2 = param2;
+        msg.param3 = param3;
+        msg.param4 = param4;
+        msg.param5 = param5;
+        msg.param6 = param6;
+        msg.param7 = param7;
         msg.command = command;
         msg.target_system = 1;
         msg.target_component = 1;
@@ -362,6 +417,7 @@ private:
         {
             publish_offboard_control_mode();
             // Take-off and hover at 5[m]
+            // TODO change to take-off 5m above CURRENT position
             publish_trajectory_setpoint({static_cast<float>(waypoints_.at(0).x), 
                                          static_cast<float>(waypoints_.at(0).y),
                                          static_cast<float>(waypoints_.at(0).z)},
@@ -467,163 +523,27 @@ private:
                         // Land when path is done
                         if (global_i_ >= f2c_path_.poses.size())
                         {
-                            current_state_ = State::LAND;
-                            RCLCPP_INFO(get_logger(), "State transitioned to LAND");
+                            current_state_ = State::RTL;
+                            RCLCPP_INFO(get_logger(), "State transitioned to RTL");
                         }
                     }
                 }
             }
         }
-
-
-        // MISSION1 state
-        else if (current_state_ == State::MISSION1)
-        {
-            // Off-board control mode
-            publish_offboard_control_mode();
-            // Move 5[m] forward
-            publish_trajectory_setpoint({static_cast<float>(waypoints_.at(1).x),
-                                         static_cast<float>(waypoints_.at(1).y),
-                                         static_cast<float>(waypoints_.at(1).z)},
-                                         {0.1, 0.1, 0.1}, M_PI_2);
-
-                                        //  static_cast<float>(test_counter_/100.0)
-
-            // Increment counter
-            test_counter_++;
-
-            // Check if the setpoint has been reached in a specified tolerance
-            if (reached_setpoint(waypoints_.at(1), vehicle_position_, 2.0))
-            {
-                // nonBlockingWait timer
-                if (!has_executed_)
-                {
-                    nonBlockingWait(seconds(5)); 
-                    has_executed_ = true;
-                }
-
-                // Wait until nonBlockingWait is done
-                if (flag_timer_done_)
-                {
-                    // Change state to MISSION2
-                    current_state_ = State::MISSION2;
-                    RCLCPP_INFO(get_logger(), "State transitioned to MISSION2");
-
-                    // Reset flags
-                    flag_timer_done_ = false;
-                    has_executed_ = false;
-                }
-            }
-        }
-        // MISSION2 state
-        else if (current_state_ == State::MISSION2)
-        {
-            // Off-board control mode
-            publish_offboard_control_mode();
-            // Move 5[m] left
-            publish_trajectory_setpoint({static_cast<float>(waypoints_.at(2).x), 
-                                         static_cast<float>(waypoints_.at(2).y),
-                                         static_cast<float>(waypoints_.at(2).z)},
-                                         {0.1, 0.1, 0.1}, M_PI_2);
-
-            // Check if the setpoint has been reached in a specified tolerance
-            if (reached_setpoint(waypoints_.at(2), vehicle_position_, 2.0))
-            {
-                // nonBlockingWait timer
-                if (!has_executed_)
-                {
-                    nonBlockingWait(seconds(5)); 
-                    has_executed_ = true;
-                }
-
-                // Wait until nonBlockingWait is done
-                if (flag_timer_done_)
-                {
-                    // Change state to MISSION2
-                    current_state_ = State::MISSION3;
-                    RCLCPP_INFO(get_logger(), "State transitioned to MISSION3");
-
-                    // Reset flags
-                    flag_timer_done_ = false;
-                    has_executed_ = false;
-                }
-            }
-        }
-        // MISSION3 state
-        else if (current_state_ == State::MISSION3)
-        {
-            // Off-board control mode
-            publish_offboard_control_mode();
-            // Move 5[m] back
-            publish_trajectory_setpoint({static_cast<float>(waypoints_.at(3).x), 
-                                         static_cast<float>(waypoints_.at(3).y),
-                                         static_cast<float>(waypoints_.at(3).z)},
-                                         {0.1, 0.1, 0.1}, M_PI_2);
-
-            // Check if the setpoint has been reached in a specified tolerance
-            if (reached_setpoint(waypoints_.at(3), vehicle_position_, 2.0))
-            {
-                // nonBlockingWait timer
-                if (!has_executed_)
-                {
-                    nonBlockingWait(seconds(5)); 
-                    has_executed_ = true;
-                }
-
-                // Wait until nonBlockingWait is done
-                if (flag_timer_done_)
-                {
-                    // Change state to MISSION4
-                    current_state_ = State::MISSION4;
-                    RCLCPP_INFO(get_logger(), "State transitioned to MISSION4");
-
-                    // Reset flags
-                    flag_timer_done_ = false;
-                    has_executed_ = false;
-                }
-            }
-        }
-        // MISSION4 state
-        else if (current_state_ == State::MISSION4)
-        {
-            // Off-board control mode
-            publish_offboard_control_mode();
-            // Move 5[m] right (Back home)
-            publish_trajectory_setpoint({static_cast<float>(waypoints_.at(4).x), 
-                                         static_cast<float>(waypoints_.at(4).y),
-                                         static_cast<float>(waypoints_.at(4).z)},
-                                         {0.1, 0.1, 0.1}, M_PI_2);
-
-            // Check if the setpoint has been reached in a specified tolerance
-            if (reached_setpoint(waypoints_.at(4), vehicle_position_, 2.0))
-            {
-                // nonBlockingWait timer
-                if (!has_executed_)
-                {
-                    nonBlockingWait(seconds(5)); 
-                    has_executed_ = true;
-                }
-
-                // Wait until nonBlockingWait is done
-                if (flag_timer_done_)
-                {
-                    // Change state to LAND
-                    current_state_ = State::LAND;
-                    RCLCPP_INFO(get_logger(), "State transitioned to LAND");
-
-                    // Reset flags
-                    flag_timer_done_ = false;
-                    has_executed_ = false;
-                }
-            }
-        }
-        // LAND state
+        // LAND at current position state
         else if (current_state_ == State::LAND)
         {
-            // TODO actually add code for landing noo it will just timeout as I'm not sending
-            // off-board control anymore.
-            RCLCPP_INFO(get_logger(), "LANDING ...");
             land();
+        }
+        // Return to launch
+        else if (current_state_ == State::RTL)
+        {
+            RTL();
+        }
+        // Emergency error state
+        else if (current_state_ == State::FAIL)
+        {
+            RTL();
         }
     }
 };
@@ -641,7 +561,6 @@ int main(int argc, char *argv[])
     rclcpp::shutdown();
     return 0;
 }
-
 
 
 
