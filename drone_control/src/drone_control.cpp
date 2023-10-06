@@ -511,6 +511,10 @@ private:
             case State::FAIL:
                 RTL();
                 break;
+            // Default state
+            default:
+                RCLCPP_INFO(get_logger(), "------ Default state ------");
+                break;
         }
     }
 };
