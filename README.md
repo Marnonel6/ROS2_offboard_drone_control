@@ -1,4 +1,4 @@
-# Drone precision farming
+# ROS2 Off-board drone control with DDS and PX4
 
 # Installation & Setup guide
 
