@@ -96,6 +96,8 @@ private:
     nav_msgs::msg::Path path_;
     // Vehicle pose from fmu/out/vehicle_odometry
     geometry_msgs::msg::Pose vehicle_position_ = geometry_msgs::msg::Pose{};
+    geometry_msgs::msg::Pose home_pose_ = geometry_msgs::msg::Pose{};
+    geometry_msgs::msg::Pose hover_home_pose_ = geometry_msgs::msg::Pose{}; // 5[m] above home pose
 
     //
     // TODO waypoint should be read in from a .json
@@ -385,8 +387,10 @@ private:
             case State::IDLE:
                 if (flag_vehicle_odometry_)
                 {
-                    // Save home position
-                    geometry_msgs::msg::Pose home_pose = vehicle_position_;
+                    // Save the drones HOME position and Hover home position
+                    home_pose_ = vehicle_position_;
+                    hover_home_pose_ = home_pose_;
+                    hover_home_pose_.position.z -= 5; // 5[m] above home pose
                     // Change state to path planning
                     current_state_ = State::PATH_PLANNING;
                     RCLCPP_INFO_STREAM(get_logger(), "State: PATH_PLANNING");
@@ -396,9 +400,9 @@ private:
                 // TODO Create take-off path to the height of the Fields2Cover path
 
                 // TODO Create path from hover to start of Fields2Cover path
-                // path_ = plan_straight_path(Hover_home_position,
-                //                            PathState_to_Pose(f2c_path_.states.at(0)),
-                //                            0.1, "/map");
+                path_ = plan_straight_path(Hover_home_position,
+                                           PathState_to_Pose(f2c_path_.states.at(0)),
+                                           0.1, "/map");
 
                 // Path planning with Fields2Cover
                 f2c_path_ = path_planning();
