@@ -34,7 +34,7 @@ install(TARGETS drone_control DESTINATION lib/${PROJECT_NAME})
 add_executable(path_planning src/path_planning.cpp)
 target_link_libraries(path_planning Fields2Cover) # Link Fields2Cover library
 ament_target_dependencies(path_planning rclcpp geometry_msgs Fields2Cover nav_msgs
-                          tf2_geometry_msgs)
+                          tf2_geometry_msgs px4_msgs)
 install(TARGETS path_planning DESTINATION lib/${PROJECT_NAME})
 
 # target_include_directories(drone_control PUBLIC
