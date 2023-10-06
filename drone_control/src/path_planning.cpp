@@ -14,6 +14,7 @@
 // ROS2 libs
 #include <rclcpp/rclcpp.hpp>
 #include "geometry_msgs/msg/point.hpp"
+#include "geometry_msgs/msg/pose_stamped.hpp"
 #include "nav_msgs/msg/path.hpp"
 #include <tf2_geometry_msgs/tf2_geometry_msgs.hpp>
 // Import lib for motion planning package
@@ -72,6 +73,8 @@ public:
 
         // Create publishers
         path_publisher_ = create_publisher<nav_msgs::msg::Path>("/f2c_path", 10);
+        vehicle_pose_publisher_ = create_publisher<geometry_msgs::msg::PoseStamped>("/vehicle_pose",
+                                                                                    10);
 
         // Create subscribers
         vehicle_odometry_subscriber_ = create_subscription<px4_msgs::msg::VehicleOdometry>(
@@ -83,9 +86,6 @@ public:
         timer_ = create_wall_timer(
             std::chrono::milliseconds(50),
             std::bind(&PathPlanning::timer_callback, this));
-        // timer_path_ = create_wall_timer(
-        //     std::chrono::milliseconds(50),
-        //     std::bind(&PathPlanning::pub_path, this));
     }
 
 private:
@@ -94,6 +94,7 @@ private:
     State current_state_ = State::IDLE;      // Current state machine state
     F2CPath f2c_path_;
     nav_msgs::msg::Path path_;
+    geometry_msgs::msg::PoseStamped vehicle_pose_;
     // Vehicle pose from fmu/out/vehicle_odometry
     geometry_msgs::msg::Pose vehicle_position_ = geometry_msgs::msg::Pose{};
     geometry_msgs::msg::Pose home_pose_ = geometry_msgs::msg::Pose{};
@@ -109,8 +110,8 @@ private:
 
     // Create objects
     rclcpp::TimerBase::SharedPtr timer_;
-    // rclcpp::TimerBase::SharedPtr timer_path_;
     rclcpp::Publisher<nav_msgs::msg::Path>::SharedPtr path_publisher_;
+    rclcpp::Publisher<geometry_msgs::msg::PoseStamped>::SharedPtr vehicle_pose_publisher_;
     rclcpp::Subscription<px4_msgs::msg::VehicleOdometry>::SharedPtr vehicle_odometry_subscriber_;
 
     /**
@@ -123,8 +124,8 @@ private:
         // Define field and robot
         F2CRobot robot (2.0, 4.0);
         // NOTE: The z-height that is specified here gets halved in the path for some reason
-        F2CCells field(F2CCell(F2CLinearRing({F2CPoint(0,0,-10), F2CPoint(0,10,-10), F2CPoint(10,10,-10),
-                                              F2CPoint(10,0,-10), F2CPoint(0,0,-10)})));
+        F2CCells field(F2CCell(F2CLinearRing({F2CPoint(5,5,-10), F2CPoint(5,15,-10), F2CPoint(15,15,-10),
+                                              F2CPoint(15,5,-10), F2CPoint(5,5,-10)})));
         // Swath generation
         f2c::sg::BruteForce bf;
         f2c::obj::NSwath n_swath_obj;
@@ -207,19 +208,40 @@ private:
         vehicle_position_.orientation.w = static_cast<double>(msg->q[3]);
         flag_vehicle_odometry_ = true; // Received vehicle odometry
 
+        // To display in rviz the vehicle pose
+        vehicle_pose_.header.frame_id = "/map";
+        vehicle_pose_.header.stamp = rclcpp::Node::now();
+        vehicle_pose_.pose.position.x = static_cast<double>(msg->position[0]);
+        vehicle_pose_.pose.position.y = static_cast<double>(msg->position[1]);
+        vehicle_pose_.pose.position.z = static_cast<double>(msg->position[2]);
+        vehicle_pose_.pose.orientation.x = static_cast<double>(msg->q[1]);
+        vehicle_pose_.pose.orientation.y = static_cast<double>(msg->q[2]);
+        vehicle_pose_.pose.orientation.z = static_cast<double>(msg->q[3]);
+        vehicle_pose_.pose.orientation.w = static_cast<double>(msg->q[0]);
+
+        // // Convert quaternion to yaw
+        // tf2::Quaternion tf_q;
+        // tf2::fromMsg(vehicle_pose_.pose.orientation, tf_q);
+        // tf2::Matrix3x3 q_mat(tf_q);
+        // double roll, pitch, yaw;
+        // q_mat.getRPY(roll, pitch, yaw);
+        // // yaw *= 57.296f;
+        // std::cout << "yaw: " << yaw << "roll: " << roll << "pitch: " << pitch << std::endl;
     }
 
     /**
      * @brief Plan straight path with discretization steps
+     * @param path The nav_msgs::msg::Path variable to append a path to
      * @param start_pose Start pose to plan from
      * @param end_pose End pose to plan to
      * @param step_size Step size for discretization
      * @param frame_id Reference frame_id for poses
+
      * @return The planned path with type nav_msgs::msg::Path
     */
-    nav_msgs::msg::Path plan_straight_path(geometry_msgs::msg::Pose start_pose,
-                                           geometry_msgs::msg::Pose end_pose,
-                                           double step_size = 0.1, std::string frame_id = "/map")
+    void plan_straight_path(nav_msgs::msg::Path& path, geometry_msgs::msg::Pose start_pose,
+                            geometry_msgs::msg::Pose end_pose,
+                            double step_size = 0.1, std::string frame_id = "/map")
     {
         // Calculate the distance between the start and end point
         double distance = euclidean_distance(start_pose.position, end_pose.position);
@@ -244,15 +266,15 @@ private:
         tf2::Quaternion tf_q_start;
         tf2::Quaternion tf_q_end;
         tf2::fromMsg(start_pose.orientation, tf_q_start);
-        tf2::fromMsg(start_pose.orientation, tf_q_start);
+        tf2::fromMsg(end_pose.orientation, tf_q_end);
         tf2::Matrix3x3 q_mat_start(tf_q_start);
-        tf2::Matrix3x3 q_mat_end(tf_q_start);
+        tf2::Matrix3x3 q_mat_end(tf_q_end);
         double roll_start, pitch_start, yaw_start, roll_end, pitch_end, yaw_end;
         q_mat_start.getRPY(roll_start, pitch_start, yaw_start);
         q_mat_end.getRPY(roll_end, pitch_end, yaw_end);
 
         // Create path
-        nav_msgs::msg::Path path;
+        // nav_msgs::msg::Path path;
         path.header.frame_id = frame_id;
         path.header.stamp = rclcpp::Node::now();
 
@@ -293,7 +315,7 @@ private:
             path.poses.push_back(pose);
         }
 
-        return path;
+        // return path;
     }
 
     ///
@@ -354,11 +376,6 @@ private:
     ///
     ///
 
-    // void pub_path()
-    // {
-    //     path_publisher_->publish(path_);
-    // }
-
     /**
      * @brief Main Timer callback
      * @return void
@@ -397,24 +414,23 @@ private:
                 }
                 break;
             case State::PATH_PLANNING:
+                // Mission Path planning with Fields2Cover
+                f2c_path_ = path_planning();
+
                 // TODO Create take-off path to the height of the Fields2Cover path
 
-                // TODO Create path from hover to start of Fields2Cover path
-                path_ = plan_straight_path(Hover_home_position,
-                                           PathState_to_Pose(f2c_path_.states.at(0)),
-                                           0.1, "/map");
+                // Create path from hover to start of Fields2Cover path
+                plan_straight_path(path_, hover_home_pose_,
+                                   PathState_to_Pose(f2c_path_.states.at(0)),
+                                   0.1, "/map");
 
-                // Path planning with Fields2Cover
-                f2c_path_ = path_planning();
-                path_.header.frame_id = "/map"; // TODO remove
-                path_.header.stamp = rclcpp::Node::now(); // TODO remove
                 // Convert Fields2Cover path to a nav_msg::msg::path format
                 f2cpath_to_navpath(path_, f2c_path_);
 
-                // TODO create path from end of fields 2 cover to home position
-                // path_ = plan_straight_path(PathState_to_Pose(f2c_path_.states.at(0)),
-                //                            home_postion,
-                //                            0.1, "/map");
+                // Create path from end of fields 2 cover to home position
+                plan_straight_path(path_, PathState_to_Pose(f2c_path_.states.back()),
+                                   hover_home_pose_,
+                                   0.1, "/map");
 
                 // Change state to path planned
                 current_state_ = State::PUB_PATH;
@@ -423,6 +439,8 @@ private:
             case State::PUB_PATH:
                 // Publish path
                 path_publisher_->publish(path_);
+                // Publish drone pose
+                vehicle_pose_publisher_->publish(vehicle_pose_);
                 break;
             // Default state
             default:

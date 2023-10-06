@@ -240,6 +240,8 @@ private:
      * https://docs.px4.io/v1.12/en/advanced_config/parameter_reference.html#data-link-loss
      * The latitude becomes approximately: 473,977,222
      * The longitude becomes approximately: 85,456,111
+     * 
+     * NOTE TODO NOT WORKING YET HAS PROBLEMS
     */
     void takeoff()
     {
