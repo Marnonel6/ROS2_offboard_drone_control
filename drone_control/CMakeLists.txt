@@ -28,7 +28,8 @@ find_package(px4_ros_com REQUIRED)
 
 # Drone control node
 add_executable(drone_control src/drone_control.cpp)
-ament_target_dependencies(drone_control rclcpp px4_msgs geometry_msgs nav_msgs tf2_geometry_msgs)
+ament_target_dependencies(drone_control rclcpp px4_msgs geometry_msgs nav_msgs tf2_geometry_msgs
+                          Eigen3 px4_ros_com)
 install(TARGETS drone_control DESTINATION lib/${PROJECT_NAME})
 
 # Path planning node

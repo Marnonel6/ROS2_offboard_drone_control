@@ -98,10 +98,9 @@ private:
     State current_state_ = State::IDLE;      // Current state machine state
     F2CPath f2c_path_;
     nav_msgs::msg::Path path_;
+    // Vehicle pose from fmu/out/vehicle_odometry
     geometry_msgs::msg::PoseStamped vehicle_pose_px4_;
     geometry_msgs::msg::PoseStamped vehicle_pose_ros_;
-    // Vehicle pose from fmu/out/vehicle_odometry
-    geometry_msgs::msg::Pose vehicle_position_ = geometry_msgs::msg::Pose{};
     geometry_msgs::msg::Pose home_pose_ = geometry_msgs::msg::Pose{};
     geometry_msgs::msg::Pose hover_home_pose_ = geometry_msgs::msg::Pose{}; // 5[m] above home pose
 
@@ -129,8 +128,8 @@ private:
         // Define field and robot
         F2CRobot robot (2.0, 4.0);
         // NOTE: The z-height that is specified here gets halved in the path for some reason
-        F2CCells field(F2CCell(F2CLinearRing({F2CPoint(5,5,-10), F2CPoint(5,15,-10), F2CPoint(15,15,-10),
-                                              F2CPoint(15,5,-10), F2CPoint(5,5,-10)})));
+        F2CCells field(F2CCell(F2CLinearRing({F2CPoint(5,5,10), F2CPoint(5,15,10), F2CPoint(15,15,10),
+                                              F2CPoint(15,5,10), F2CPoint(5,5,10)})));
         // Swath generation
         f2c::sg::BruteForce bf;
         f2c::obj::NSwath n_swath_obj;
@@ -203,17 +202,7 @@ private:
     */
     void vehicle_odometry_callback(const px4_msgs::msg::VehicleOdometry::UniquePtr msg)
     {
-        // Set vehicle position
-        vehicle_position_.position.x = static_cast<double>(msg->position[0]);
-        vehicle_position_.position.y = static_cast<double>(msg->position[1]);
-        vehicle_position_.position.z = static_cast<double>(msg->position[2]);
-        vehicle_position_.orientation.x = static_cast<double>(msg->q[0]);
-        vehicle_position_.orientation.y = static_cast<double>(msg->q[1]);
-        vehicle_position_.orientation.z = static_cast<double>(msg->q[2]);
-        vehicle_position_.orientation.w = static_cast<double>(msg->q[3]);
-        flag_vehicle_odometry_ = true; // Received vehicle odometry
-
-        // To display in rviz the vehicle pose
+        // Get vehicle position in PX4 coordinates
         vehicle_pose_px4_.header.frame_id = "/map";
         vehicle_pose_px4_.header.stamp = rclcpp::Node::now();
         vehicle_pose_px4_.pose.position.x = static_cast<double>(msg->position[0]);
@@ -225,26 +214,32 @@ private:
         vehicle_pose_px4_.pose.orientation.w = static_cast<double>(msg->q[0]);
 
         // Convert from PX4 to ROS coordinates
-        // Position
+        // To display in rviz the vehicle pose with -> vehicle_pose_ros_
+        vehicle_pose_ros_.header.frame_id = "/map";
+        vehicle_pose_ros_.header.stamp = rclcpp::Node::now();
+        // Convert Position
         Eigen::Vector3d px4_ned;
-        px4_ned << vehicle_position_.position.x, vehicle_position_.position.y,
-                   vehicle_position_.position.z;
+        px4_ned << vehicle_pose_px4_.pose.position.x, vehicle_pose_px4_.pose.position.y,
+                   vehicle_pose_px4_.pose.position.z;
         Eigen::Vector3d ros_enu;
         ros_enu = px4_ros_com::frame_transforms::ned_to_enu_local_frame(px4_ned);
-        vehicle_pose_ros_ = vehicle_pose_px4_;
         vehicle_pose_ros_.pose.position.x = ros_enu(0);
         vehicle_pose_ros_.pose.position.y = ros_enu(1);
         vehicle_pose_ros_.pose.position.z = ros_enu(2);
-        // Orientation
+        // Convert Orientation
+        Eigen::Quaterniond px4_q;
+        px4_q.x() = vehicle_pose_px4_.pose.orientation.x;
+        px4_q.y() = vehicle_pose_px4_.pose.orientation.y;
+        px4_q.z() = vehicle_pose_px4_.pose.orientation.z;
+        px4_q.w() = vehicle_pose_px4_.pose.orientation.w;
+        Eigen::Quaterniond ros_q;
+        ros_q = px4_ros_com::frame_transforms::ned_to_enu_orientation(px4_q);
+        vehicle_pose_ros_.pose.orientation.x = ros_q.x();
+        vehicle_pose_ros_.pose.orientation.y = ros_q.y();
+        vehicle_pose_ros_.pose.orientation.z = ros_q.z();
+        vehicle_pose_ros_.pose.orientation.w = ros_q.w();
 
-        // // Convert quaternion to yaw
-        // tf2::Quaternion tf_q;
-        // tf2::fromMsg(vehicle_pose_.pose.orientation, tf_q);
-        // tf2::Matrix3x3 q_mat(tf_q);
-        // double roll, pitch, yaw;
-        // q_mat.getRPY(roll, pitch, yaw);
-        // // yaw *= 57.296f;
-        // std::cout << "yaw: " << yaw << "roll: " << roll << "pitch: " << pitch << std::endl;
+        flag_vehicle_odometry_ = true; // Received vehicle odometry flag
     }
 
     /**
@@ -407,9 +402,9 @@ private:
                 if (flag_vehicle_odometry_)
                 {
                     // Save the drones HOME position and Hover home position
-                    home_pose_ = vehicle_position_;
+                    home_pose_ = vehicle_pose_ros_.pose;
                     hover_home_pose_ = home_pose_;
-                    hover_home_pose_.position.z -= 5; // 5[m] above home pose
+                    hover_home_pose_.position.z += 5; // 5[m] above home pose
                     // Change state to path planning
                     current_state_ = State::PATH_PLANNING;
                     RCLCPP_INFO_STREAM(get_logger(), "State: PATH_PLANNING");

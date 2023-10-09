@@ -11,6 +11,9 @@
 #include <vector>
 #include <thread>
 #include <mutex>
+#include <eigen3/Eigen/Eigen>
+#include <eigen3/Eigen/Dense>
+#include <eigen3/Eigen/Geometry>
 // ROS2 libs
 #include <rclcpp/rclcpp.hpp>
 #include "geometry_msgs/msg/point.hpp"
@@ -22,6 +25,7 @@
 #include <px4_msgs/msg/vehicle_command.hpp>
 #include <px4_msgs/msg/vehicle_control_mode.hpp>
 #include <px4_msgs/msg/vehicle_odometry.hpp>
+#include <px4_ros_com/frame_transforms.h>
 
 using namespace std::chrono;
 using namespace std::chrono_literals;
@@ -59,7 +63,7 @@ public:
         // TODO waypoint should be read in from a .json
         //
         // Hover at 5[m]
-        waypoint_0_.z = -5;
+        waypoint_0_.z = 5;
         // Add all waypoint to the vector
         waypoints_.push_back(waypoint_0_);
 
@@ -96,8 +100,8 @@ private:
     // Vehicle position from fmu/out/vehicle_odometry -> Init to all zeros
     geometry_msgs::msg::Point vehicle_position_ = geometry_msgs::msg::Point{};
     std::vector<geometry_msgs::msg::Point> waypoints_;
-    nav_msgs::msg::Path f2c_path_; // Fields2Cover path
-    size_t global_i_ = 0; // global counter for f2c_path_
+    nav_msgs::msg::Path f2c_path_ros_; // Fields2Cover path in ROS coordinates frame
+    size_t global_i_ = 0; // global counter for f2c_path_ros_
     double position_tolerance_ = 1.0; // [m]
 
     // Flags
@@ -126,10 +130,20 @@ private:
     */
     void vehicle_odometry_callback(const px4_msgs::msg::VehicleOdometry::UniquePtr msg)
     {
+        // Convert from PX4 to ROS coordinates
+        // Position
+        Eigen::Vector3d px4_ned;
+        px4_ned << static_cast<double>(msg->position[0]),
+                   static_cast<double>(msg->position[1]),
+                   static_cast<double>(msg->position[2]);
+        Eigen::Vector3d ros_enu;
+        ros_enu = px4_ros_com::frame_transforms::ned_to_enu_local_frame(px4_ned);
         // Set vehicle position
-        vehicle_position_.x = static_cast<double>(msg->position[0]);
-        vehicle_position_.y = static_cast<double>(msg->position[1]);
-        vehicle_position_.z = static_cast<double>(msg->position[2]);
+        vehicle_position_.x = ros_enu(0);
+        vehicle_position_.y = ros_enu(1);
+        vehicle_position_.z = ros_enu(2);
+        // TODO orientation from PX4 to ROS
+        // Look at path_planning vehicle_odometry_callback function
     }
 
     /**
@@ -139,7 +153,7 @@ private:
     void path_callback(const nav_msgs::msg::Path msg)
     {
         // Save Fields2Cover path
-        f2c_path_ = msg;
+        f2c_path_ros_ = msg;
         flag_mission_ = true;
     }
 
@@ -164,7 +178,7 @@ private:
      *        For this example, it sends a trajectory setpoint to make the
      *        vehicle hover at 5 meters with a yaw angle of 180 degrees.
      * 
-     * @param position - (x: North, y: East, z: Down)
+     * @param position - IN ROS COORDINATE SYSTEM - (x: North, y: East, z: Down)
      * @param velocity
      * @param yaw
      * 
@@ -175,6 +189,26 @@ private:
                                      std::array<float, 3UL> velocity,
                                      float yaw)
     {
+
+        // Convert from ROS to PX4 coordinates before publishing
+        // Position
+        Eigen::Vector3d ros_enu;
+        ros_enu << position.at(0),
+                   position.at(1),
+                   position.at(2);
+        Eigen::Vector3d px4_ned;
+        px4_ned = px4_ros_com::frame_transforms::enu_to_ned_local_frame(ros_enu);
+        position.at(0) = px4_ned(0);
+        position.at(1) = px4_ned(1);
+        position.at(2) = px4_ned(2);
+        // Orientation
+        Eigen::Quaterniond q_ros;
+        q_ros = px4_ros_com::frame_transforms::utils::quaternion::quaternion_from_euler(0, 0, yaw);
+        Eigen::Quaterniond q_px4;
+        q_px4 = px4_ros_com::frame_transforms::enu_to_ned_orientation(q_ros);
+        yaw = px4_ros_com::frame_transforms::utils::quaternion::quaternion_get_yaw(q_px4);
+
+        // Create trajectory setpoint message and publish
         px4_msgs::msg::TrajectorySetpoint msg{};
         msg.position = position; // (x: North, y: East, z: Down) - (Go up -z)
         msg.velocity = velocity;
@@ -393,8 +427,8 @@ private:
                 // Take-off and hover at 5[m]
                 // TODO change to take-off 5m above CURRENT position
                 publish_trajectory_setpoint({static_cast<float>(waypoints_.at(0).x), 
-                                            static_cast<float>(waypoints_.at(0).y),
-                                            static_cast<float>(waypoints_.at(0).z)},
+                                             static_cast<float>(waypoints_.at(0).y),
+                                             static_cast<float>(waypoints_.at(0).z)},
                                             {0.1, 0.1, 0.1}, M_PI_2);
 
                 if (offboard_setpoint_counter_ >= 200 && flag_mission_) {
@@ -424,9 +458,9 @@ private:
                 publish_offboard_control_mode();
                 // Take-off and hover at 5[m]
                 publish_trajectory_setpoint({static_cast<float>(waypoints_.at(0).x), 
-                                            static_cast<float>(waypoints_.at(0).y),
-                                            static_cast<float>(waypoints_.at(0).z)},
-                                            {0.1, 0.1, 0.1}, M_PI_2);
+                                             static_cast<float>(waypoints_.at(0).y),
+                                             static_cast<float>(waypoints_.at(0).z)},
+                                             {0.1, 0.1, 0.1}, M_PI_2);
 
                 // Check if the setpoint has been reached in a specified tolerance
                 if (reached_setpoint(waypoints_.at(0), vehicle_position_, 2.0))
@@ -460,19 +494,19 @@ private:
                 {
                     // Publish path waypoint
                     tf2::Quaternion tf_q;
-                    tf2::fromMsg(f2c_path_.poses.at(global_i_).pose.orientation, tf_q);
+                    tf2::fromMsg(f2c_path_ros_.poses.at(global_i_).pose.orientation, tf_q);
                     tf2::Matrix3x3 m(tf_q);
                     double roll, pitch, yaw_setpoint;
                     m.getRPY(roll, pitch, yaw_setpoint);
-                    publish_trajectory_setpoint({static_cast<float>(f2c_path_.poses.at(global_i_).pose.position.x),
-                                                static_cast<float>(f2c_path_.poses.at(global_i_).pose.position.y),
-                                                static_cast<float>(f2c_path_.poses.at(global_i_).pose.position.z)},
-                                                {0.1, 0.1, 0.1}, yaw_setpoint);
+                    publish_trajectory_setpoint({static_cast<float>(f2c_path_ros_.poses.at(global_i_).pose.position.x),
+                                                 static_cast<float>(f2c_path_ros_.poses.at(global_i_).pose.position.y),
+                                                 static_cast<float>(f2c_path_ros_.poses.at(global_i_).pose.position.z)},
+                                                 {0.1, 0.1, 0.1}, yaw_setpoint);
                     flag_next_waypoint_ = false;
                 } else
                 {
                     // Check if the setpoint has been reached in a specified tolerance
-                    if (reached_setpoint(f2c_path_.poses.at(global_i_).pose.position, vehicle_position_,
+                    if (reached_setpoint(f2c_path_ros_.poses.at(global_i_).pose.position, vehicle_position_,
                                         position_tolerance_))
                     {
                         // nonBlockingWait timer
@@ -492,7 +526,7 @@ private:
                             global_i_++; // Increment waypoint number
 
                             // Land when path is done
-                            if (global_i_ >= f2c_path_.poses.size())
+                            if (global_i_ >= f2c_path_ros_.poses.size())
                             {
                                 current_state_ = State::RTL;
                                 RCLCPP_INFO(get_logger(), "State transitioned to RTL");
