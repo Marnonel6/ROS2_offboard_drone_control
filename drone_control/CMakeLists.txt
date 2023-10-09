@@ -12,7 +12,7 @@ endif()
 find_package(ament_cmake REQUIRED)
 find_package(builtin_interfaces REQUIRED)
 find_package(eigen3_cmake_module REQUIRED)
-# find_package(Eigen3 REQUIRED)
+find_package(Eigen3 REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(px4_msgs REQUIRED)
 find_package(rclcpp REQUIRED)
@@ -20,6 +20,7 @@ find_package(sensor_msgs REQUIRED)
 find_package(Fields2Cover REQUIRED)
 find_package(nav_msgs REQUIRED)
 find_package(tf2_geometry_msgs REQUIRED)
+find_package(px4_ros_com REQUIRED)
 
 #################
 # Setup targets #
@@ -34,7 +35,7 @@ install(TARGETS drone_control DESTINATION lib/${PROJECT_NAME})
 add_executable(path_planning src/path_planning.cpp)
 target_link_libraries(path_planning Fields2Cover) # Link Fields2Cover library
 ament_target_dependencies(path_planning rclcpp geometry_msgs Fields2Cover nav_msgs
-                          tf2_geometry_msgs px4_msgs)
+                          tf2_geometry_msgs px4_msgs px4_ros_com Eigen3)
 install(TARGETS path_planning DESTINATION lib/${PROJECT_NAME})
 
 # target_include_directories(drone_control PUBLIC
@@ -49,7 +50,7 @@ install(TARGETS path_planning DESTINATION lib/${PROJECT_NAME})
 # Export information to downstream packages
 ament_export_dependencies(ament_cmake rclcpp rosidl_default_runtime eigen3_cmake_module Eigen3
                           px4_msgs geometry_msgs sensor_msgs Fields2Cover nav_msgs
-                          tf2_geometry_msgs)
+                          tf2_geometry_msgs px4_ros_com)
 
 ament_export_include_directories(include)
 

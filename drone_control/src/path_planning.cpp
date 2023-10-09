@@ -11,6 +11,9 @@
 #include <cstdio>
 #include <math.h>
 #include <vector>
+#include <eigen3/Eigen/Eigen>
+#include <eigen3/Eigen/Dense>
+#include <eigen3/Eigen/Geometry>
 // ROS2 libs
 #include <rclcpp/rclcpp.hpp>
 #include "geometry_msgs/msg/point.hpp"
@@ -21,6 +24,7 @@
 #include "fields2cover.h"
 // PX4 libs
 #include <px4_msgs/msg/vehicle_odometry.hpp>
+#include <px4_ros_com/frame_transforms.h>
 
 // State machine states
 enum class State {
@@ -94,7 +98,8 @@ private:
     State current_state_ = State::IDLE;      // Current state machine state
     F2CPath f2c_path_;
     nav_msgs::msg::Path path_;
-    geometry_msgs::msg::PoseStamped vehicle_pose_;
+    geometry_msgs::msg::PoseStamped vehicle_pose_px4_;
+    geometry_msgs::msg::PoseStamped vehicle_pose_ros_;
     // Vehicle pose from fmu/out/vehicle_odometry
     geometry_msgs::msg::Pose vehicle_position_ = geometry_msgs::msg::Pose{};
     geometry_msgs::msg::Pose home_pose_ = geometry_msgs::msg::Pose{};
@@ -209,15 +214,28 @@ private:
         flag_vehicle_odometry_ = true; // Received vehicle odometry
 
         // To display in rviz the vehicle pose
-        vehicle_pose_.header.frame_id = "/map";
-        vehicle_pose_.header.stamp = rclcpp::Node::now();
-        vehicle_pose_.pose.position.x = static_cast<double>(msg->position[0]);
-        vehicle_pose_.pose.position.y = static_cast<double>(msg->position[1]);
-        vehicle_pose_.pose.position.z = static_cast<double>(msg->position[2]);
-        vehicle_pose_.pose.orientation.x = static_cast<double>(msg->q[1]);
-        vehicle_pose_.pose.orientation.y = static_cast<double>(msg->q[2]);
-        vehicle_pose_.pose.orientation.z = static_cast<double>(msg->q[3]);
-        vehicle_pose_.pose.orientation.w = static_cast<double>(msg->q[0]);
+        vehicle_pose_px4_.header.frame_id = "/map";
+        vehicle_pose_px4_.header.stamp = rclcpp::Node::now();
+        vehicle_pose_px4_.pose.position.x = static_cast<double>(msg->position[0]);
+        vehicle_pose_px4_.pose.position.y = static_cast<double>(msg->position[1]);
+        vehicle_pose_px4_.pose.position.z = static_cast<double>(msg->position[2]);
+        vehicle_pose_px4_.pose.orientation.x = static_cast<double>(msg->q[1]);
+        vehicle_pose_px4_.pose.orientation.y = static_cast<double>(msg->q[2]);
+        vehicle_pose_px4_.pose.orientation.z = static_cast<double>(msg->q[3]);
+        vehicle_pose_px4_.pose.orientation.w = static_cast<double>(msg->q[0]);
+
+        // Convert from PX4 to ROS coordinates
+        // Position
+        Eigen::Vector3d px4_ned;
+        px4_ned << vehicle_position_.position.x, vehicle_position_.position.y,
+                   vehicle_position_.position.z;
+        Eigen::Vector3d ros_enu;
+        ros_enu = px4_ros_com::frame_transforms::ned_to_enu_local_frame(px4_ned);
+        vehicle_pose_ros_ = vehicle_pose_px4_;
+        vehicle_pose_ros_.pose.position.x = ros_enu(0);
+        vehicle_pose_ros_.pose.position.y = ros_enu(1);
+        vehicle_pose_ros_.pose.position.z = ros_enu(2);
+        // Orientation
 
         // // Convert quaternion to yaw
         // tf2::Quaternion tf_q;
@@ -382,22 +400,6 @@ private:
     */
     void timer_callback()
     {
-        // if state == wait for drone odometry position
-        //     save home position
-        //     change state to path planning
-        // if state == path PathPlanning
-        //     // TODO Create take-off path to the height of the Fields2Cover path
-        //     // TODO Create path from hover to start of Fields2Cover path
-        //     // Convert Fields2Cover path to a nav_msg::msg::path format
-        //     path_.header.frame_id = "/map";
-        //     path_.header.stamp = rclcpp::Node::now();
-        //     f2cpath_to_navpath(path_, f2c_path_);
-        //     // TODO create path from end of fields 2 cover to home position
-
-        //     change state to path planned
-        // if state == path planned
-        //     path_publisher_->publish(path_);
-
         switch (current_state_)
         {
             // IDLE state -> Wait for drone odometry
@@ -440,7 +442,7 @@ private:
                 // Publish path
                 path_publisher_->publish(path_);
                 // Publish drone pose
-                vehicle_pose_publisher_->publish(vehicle_pose_);
+                vehicle_pose_publisher_->publish(vehicle_pose_ros_);
                 break;
             // Default state
             default:
