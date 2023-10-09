@@ -82,6 +82,11 @@ public:
             "/fmu/out/vehicle_odometry", qos, std::bind(&DroneControl::vehicle_odometry_callback,
             this, std::placeholders::_1)
         );
+        vehicle_control_mode_subscriber_ = create_subscription<px4_msgs::msg::VehicleControlMode>(
+            "/fmu/out/vehicle_control_mode", qos,
+            std::bind(&DroneControl::vehicle_control_mode_callback,
+            this, std::placeholders::_1)
+        );
         path_subscriber_ = create_subscription<nav_msgs::msg::Path>(
             "/f2c_path", qos, std::bind(&DroneControl::path_callback,
             this, std::placeholders::_1)
@@ -101,6 +106,7 @@ private:
     geometry_msgs::msg::Point vehicle_position_ = geometry_msgs::msg::Point{};
     std::vector<geometry_msgs::msg::Point> waypoints_;
     nav_msgs::msg::Path f2c_path_ros_; // Fields2Cover path in ROS coordinates frame
+    px4_msgs::msg::VehicleControlMode vehicle_status_; // Drone status flags
     size_t global_i_ = 0; // global counter for f2c_path_ros_
     double position_tolerance_ = 1.0; // [m]
 
@@ -122,6 +128,7 @@ private:
     rclcpp::Publisher<px4_msgs::msg::TrajectorySetpoint>::SharedPtr trajectory_setpoint_publisher_;
     rclcpp::Publisher<px4_msgs::msg::VehicleCommand>::SharedPtr vehicle_command_publisher_;
     rclcpp::Subscription<px4_msgs::msg::VehicleOdometry>::SharedPtr vehicle_odometry_subscriber_;
+    rclcpp::Subscription<px4_msgs::msg::VehicleControlMode>::SharedPtr vehicle_control_mode_subscriber_;
     rclcpp::Subscription<nav_msgs::msg::Path>::SharedPtr path_subscriber_;
 
     /**
@@ -144,6 +151,16 @@ private:
         vehicle_position_.z = ros_enu(2);
         // TODO orientation from PX4 to ROS
         // Look at path_planning vehicle_odometry_callback function
+    }
+
+    /**
+     * @brief Vehicle control mode subscriber callback
+     *
+    */
+    void vehicle_control_mode_callback(const px4_msgs::msg::VehicleControlMode::UniquePtr msg)
+    {
+        // Save vehicle status
+        vehicle_status_ = *msg;
     }
 
     /**
@@ -441,12 +458,14 @@ private:
                     // Arm the vehicle
                     arm();
 
-                    // TODO Check if state transitioned to offboard and armed an only then change state
-                    //      otherwise arm again
-
-                    // Change state to OFFBOARD
-                    current_state_ = State::OFFBOARD;
-                    RCLCPP_INFO(get_logger(), "State transitioned to OFFBOARD");
+                    // Check if state transitioned to offboard and that the drone is armed
+                    if (vehicle_status_.flag_armed == true &&
+                        vehicle_status_.flag_control_offboard_enabled == true)
+                    {
+                        // Change state to OFFBOARD
+                        current_state_ = State::OFFBOARD;
+                        RCLCPP_INFO(get_logger(), "State transitioned to OFFBOARD");
+                    }
                 }
 
                 // Increment setpoint counter
