@@ -528,8 +528,8 @@ private:
                             // Land when path is done
                             if (global_i_ >= f2c_path_ros_.poses.size())
                             {
-                                current_state_ = State::RTL;
-                                RCLCPP_INFO(get_logger(), "State transitioned to RTL");
+                                current_state_ = State::LAND;
+                                RCLCPP_INFO(get_logger(), "State transitioned to LAND");
                             }
                         }
                     }

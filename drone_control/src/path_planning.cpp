@@ -55,24 +55,6 @@ public:
         // int frequency = get_parameter("frequency").get_parameter_value().get<int>();
         // TODO NOTE Set field, drone parameters from a .json file
 
-        //
-        // TODO waypoint should be read in from a .json
-        // NOTE this is a rectangle
-        //
-        // Up
-        // waypoint_0_.x = 0;
-        // waypoint_0_.y = 0;
-        // waypoint_0_.z = -5;
-        // Add all waypoint to the vector
-        // waypoints_.push_back(waypoint_0_);
-
-
-        // Path planning with Fields2Cover
-        // f2c_path_ = path_planning();
-        // path_.header.frame_id = "/map";
-        // path_.header.stamp = rclcpp::Node::now();
-        // f2cpath_to_navpath(path_, f2c_path_);
-
         // Initialize variables
 
         // Create publishers
@@ -94,7 +76,6 @@ public:
 
 private:
     // Variables
-    // std::vector<geometry_msgs::msg::Point> waypoints_;
     State current_state_ = State::IDLE;      // Current state machine state
     F2CPath f2c_path_;
     nav_msgs::msg::Path path_;
@@ -103,11 +84,6 @@ private:
     geometry_msgs::msg::PoseStamped vehicle_pose_ros_;
     geometry_msgs::msg::Pose home_pose_ = geometry_msgs::msg::Pose{};
     geometry_msgs::msg::Pose hover_home_pose_ = geometry_msgs::msg::Pose{}; // 5[m] above home pose
-
-    //
-    // TODO waypoint should be read in from a .json
-    //
-    // geometry_msgs::msg::Point waypoint_0_ = geometry_msgs::msg::Point{};
 
     // Flags
     bool flag_vehicle_odometry_ = false;
@@ -275,6 +251,10 @@ private:
         int yaw_number_of_steps = ceil(static_cast<float>(rounded_number_of_steps/10));
         if (yaw_number_of_steps <= 0){ yaw_number_of_steps = 1;}
 
+        // Calculate yaw to point drone to end_pose
+        double yaw_to_point = angleBetweenPoints(start_pose.position.x, start_pose.position.y,
+                                                 end_pose.position.x, end_pose.position.y);
+
         // geometry_msgs::msg::Quaternion -> tf2::Quaternion -> Yaw (Radians)
         tf2::Quaternion tf_q_start;
         tf2::Quaternion tf_q_end;
@@ -286,8 +266,7 @@ private:
         q_mat_start.getRPY(roll_start, pitch_start, yaw_start);
         q_mat_end.getRPY(roll_end, pitch_end, yaw_end);
 
-        // Create path
-        // nav_msgs::msg::Path path;
+        // Populate path
         path.header.frame_id = frame_id;
         path.header.stamp = rclcpp::Node::now();
 
@@ -302,14 +281,14 @@ private:
             point.z = start_pose.position.z +
                       (j * (end_pose.position.z - start_pose.position.z) / rounded_number_of_steps);
 
-            // Update yaw-angle with incremental step values
+            // Update yaw-angle with incremental step values to point to the end_pose
             double yaw;
             if (j<=yaw_number_of_steps)
             {
-                yaw = yaw_start + (j * (yaw_end - yaw_start) / rounded_number_of_steps);
+                yaw = yaw_start + (j * (yaw_to_point - yaw_start) / rounded_number_of_steps);
             } else
             {
-                yaw = yaw_end;
+                yaw = yaw_to_point;
             }
             // Yaw (Radians) -> tf2::Quaternion
             tf2::Quaternion tf2_q;
@@ -327,8 +306,6 @@ private:
             // Add point to path
             path.poses.push_back(pose);
         }
-
-        // return path;
     }
 
     ///
@@ -383,6 +360,28 @@ private:
         return pose;
     }
 
+    /**
+     * @brief Calculate angle between two points
+     * @param x1 First point x-coordinate
+     * @param y1 First point y-coordinate
+     * @param x2 Second point x-coordinate
+     * @param y2 Second point y-coordinate
+     * @return Angle between points in radians
+    */
+    double angleBetweenPoints(double x1, double y1, double x2, double y2) {
+        double dy = y2 - y1;
+        double dx = x2 - x1;
+        
+        double angle = atan2(dy, dx);
+
+        // Adjust angle to [0, 2*Pi] range
+        if (angle < 0) {
+            angle += 2 * M_PI;
+        }
+
+        return angle;
+    }
+
     ///
     ///
     /// LIBRARY functions later!!
@@ -404,7 +403,7 @@ private:
                     // Save the drones HOME position and Hover home position
                     home_pose_ = vehicle_pose_ros_.pose;
                     hover_home_pose_ = home_pose_;
-                    hover_home_pose_.position.z += 5; // 5[m] above home pose
+                    hover_home_pose_.position.z = 5; // 5[m] above home pose
                     // Change state to path planning
                     current_state_ = State::PATH_PLANNING;
                     RCLCPP_INFO_STREAM(get_logger(), "State: PATH_PLANNING");
@@ -415,6 +414,7 @@ private:
                 f2c_path_ = path_planning();
 
                 // TODO Create take-off path to the height of the Fields2Cover path
+                // For now just take-off is a setpoint at 5[m]
 
                 // Create path from hover to start of Fields2Cover path
                 plan_straight_path(path_, hover_home_pose_,
@@ -443,7 +443,6 @@ private:
             default:
                 RCLCPP_INFO(get_logger(), "------ Default state ------");
                 break;
-
         }
     }
 
