@@ -7,6 +7,7 @@
 
 ## Pixhawk 6X setup
 - PX4 v1.14 for new Micro XRCE-DDS capabilities
+- NOTE TODO version 1.14 is now a stable version so do not have to build from source anymore update the instructions
 - Build v1.14 instructions [here](https://docs.px4.io/main/en/dev_setup/building_px4.html)
 
         git clone https://github.com/PX4/PX4-Autopilot.git --recursive
@@ -21,7 +22,7 @@
 ## Setup on drone control computer (Laptop for SITL or RPi 4 on drone)
 - [Install ROS2 Humble](https://docs.px4.io/main/en/ros/ros2_comm.html#install-ros-2)
 - [ROS2 Off-board drone control](https://github.com/Marnonel6/ROS2_offboard_drone_control)
-    - git clone git@github.com:Marnonel6/ROS2_offboard_drone_control.git
+        git clone git@github.com:Marnonel6/ROS2_offboard_drone_control.git
 
     - To clone the ROS2 control package an alias with the deployment key also exists on the Pi. Use:
             osprey_code_pull
@@ -54,8 +55,8 @@
         make -j$(nproc);
         sudo make install;
 
-        - On RPi I have a deployment key with an alias in the `.bashrc` file to clone the repo. Use:
-                fields2cover_code_pull
+    - On RPi I have a deployment key with an alias in the `.bashrc` file to clone the repo. Use:
+            fields2cover_code_pull
 
 ## PX4 SITL Simulation with (Ignition) Gazebo setup (On Ubuntu Laptop)
 - [Install PX4 development environment](https://docs.px4.io/main/en/ros/ros2_comm.html#install-px4)
