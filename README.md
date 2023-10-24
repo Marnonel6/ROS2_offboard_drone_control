@@ -30,7 +30,7 @@
         make
         sudo make install
         sudo ldconfig /usr/local/lib/
-- [Fields2Cover](https://github.com/Marnonel6/Fields2Cover)
+- [Fields2Cover Fork](https://github.com/Marnonel6/Fields2Cover) or [Fields2Cover](https://github.com/Fields2Cover/Fields2Cover)
 
         sudo apt-get update
         sudo apt-get install --no-install-recommends software-properties-common
@@ -43,14 +43,13 @@
 
         git clone git@github.com:Marnonel6/Fields2Cover.git
         cd Fields2Cover
-        git checkout feature/swath_discretization (NOTE: Waiting on a pull-request to main)
         mkdir -p build;
         cd build;
         cmake -DCMAKE_BUILD_TYPE=Release ..;
         make -j$(nproc);
         sudo make install;
 
-        - On Pi I have a deployment key with an alias in the `.bashrc` file to clone the repo. Use:
+        - On RPi I have a deployment key with an alias in the `.bashrc` file to clone the repo. Use:
                 fields2cover_code_pull
 
 - To clone the ROS2 control package an alias with the deployment key also exists on the Pi. Use:
