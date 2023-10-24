@@ -20,6 +20,11 @@
 
 ## Setup on drone control computer (Laptop for SITL or RPi 4 on drone)
 - [Install ROS2 Humble](https://docs.px4.io/main/en/ros/ros2_comm.html#install-ros-2)
+- [ROS2 Off-board drone control](https://github.com/Marnonel6/ROS2_offboard_drone_control)
+    - git clone git@github.com:Marnonel6/ROS2_offboard_drone_control.git
+
+    - To clone the ROS2 control package an alias with the deployment key also exists on the Pi. Use:
+            osprey_code_pull
 - [Setup Micro XRCE-DDS Agent](https://docs.px4.io/main/en/ros/ros2_comm.html#setup-the-agent)
 
         git clone https://github.com/eProsima/Micro-XRCE-DDS-Agent.git
@@ -51,9 +56,6 @@
 
         - On RPi I have a deployment key with an alias in the `.bashrc` file to clone the repo. Use:
                 fields2cover_code_pull
-
-- To clone the ROS2 control package an alias with the deployment key also exists on the Pi. Use:
-        osprey_code_pull
 
 ## PX4 SITL Simulation with (Ignition) Gazebo setup (On Ubuntu Laptop)
 - [Install PX4 development environment](https://docs.px4.io/main/en/ros/ros2_comm.html#install-px4)
