@@ -50,6 +50,12 @@
         make -j$(nproc);
         sudo make install;
 
+        - On Pi I have a deployment key with an alias in the `.bashrc` file to clone the repo. Use:
+                fields2cover_code_pull
+
+- To clone the ROS2 control package an alias with the deployment key also exists on the Pi. Use:
+        osprey_code_pull
+
 ## PX4 SITL Simulation with (Ignition) Gazebo setup (On Ubuntu Laptop)
 - [Install PX4 development environment](https://docs.px4.io/main/en/ros/ros2_comm.html#install-px4)
 
