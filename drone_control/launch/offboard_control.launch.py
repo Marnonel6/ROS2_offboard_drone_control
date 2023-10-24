@@ -5,22 +5,18 @@ Launch file for off-board drone control on a companion computer over DDS
 from launch import LaunchDescription
 from launch_ros.actions import Node
 from launch.actions import ExecuteProcess, DeclareLaunchArgument
-from launch.conditions import LaunchConfigurationEquals
+from launch.conditions import LaunchConfigurationEquals, LaunchConfigurationNotEquals
 import socket
 
 def generate_launch_description():
 
     return LaunchDescription([
-        # Declare the hostname argument's to adapt code to hardware it is running on
+        # Declare the hostname argument to adapt code to hardware it is running on
+        # This checks if the code is running on the RPi with a hostname -> osprey
         DeclareLaunchArgument(
             name='RPi_hostname',
             default_value='osprey',
             description='Change code to run on RPi'
-            ),
-        DeclareLaunchArgument(
-            name='Laptop_hostname',
-            default_value='arragon',
-            description='Change code to run on laptop with SITL interface'
             ),
         # Start MicroXRCEAgent DDS if on the RPi that connects over serial (UART) to the Pixhawk FC
         ExecuteProcess(
@@ -32,10 +28,10 @@ def generate_launch_description():
                       ),
         # With Gazebo SITL start MicroXRCEAgent DDS with udp connection (On your laptop)
         ExecuteProcess(
-                        condition=LaunchConfigurationEquals('Laptop_hostname',socket.gethostname()),
-                        cmd=[[
-                             'MicroXRCEAgent udp4 --port 8888 -v'
-                            ]],
+                       condition=LaunchConfigurationNotEquals('RPi_hostname',socket.gethostname()),
+                       cmd=[[
+                            'MicroXRCEAgent udp4 --port 8888 -v'
+                           ]],
                        shell=True,
                       ),
         # Control node
