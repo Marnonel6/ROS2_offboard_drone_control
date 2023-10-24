@@ -126,11 +126,11 @@ private:
         // Save to file
         // new_path.saveToFile("discretized_swath_path.csv", 3); // Specify precision to the significant number
         // Visualize
-        f2c::Visualizer::figure();
-        f2c::Visualizer::plot(field);
-        f2c::Visualizer::plot(new_path);
-        f2c::Visualizer::plot(boustrophedon_swaths);
-        f2c::Visualizer::show();
+        // f2c::Visualizer::figure();
+        // f2c::Visualizer::plot(field);
+        // f2c::Visualizer::plot(new_path);
+        // f2c::Visualizer::plot(boustrophedon_swaths);
+        // f2c::Visualizer::show(); # NOTE displays the path
 
         return new_path;
     }

@@ -446,7 +446,7 @@ private:
                 publish_trajectory_setpoint({static_cast<float>(waypoints_.at(0).x), 
                                              static_cast<float>(waypoints_.at(0).y),
                                              static_cast<float>(waypoints_.at(0).z)},
-                                            {0.1, 0.1, 0.1}, M_PI_2);
+                                            {0.1, 0.1, 0.1}, 0);
 
                 if (offboard_setpoint_counter_ >= 200 && flag_mission_) {
                     // Change to off-board mode after 200 setpoints
@@ -479,7 +479,7 @@ private:
                 publish_trajectory_setpoint({static_cast<float>(waypoints_.at(0).x), 
                                              static_cast<float>(waypoints_.at(0).y),
                                              static_cast<float>(waypoints_.at(0).z)},
-                                             {0.1, 0.1, 0.1}, M_PI_2);
+                                             {0.1, 0.1, 0.1}, 0);
 
                 // Check if the setpoint has been reached in a specified tolerance
                 if (reached_setpoint(waypoints_.at(0), vehicle_position_, 2.0))
@@ -495,7 +495,8 @@ private:
                     if (flag_timer_done_)
                     {
                         // Change state to MISSION
-                        current_state_ = State::MISSION;
+                        // current_state_ = State::MISSION;
+                        current_state_ = State::LAND; // TODO Change back to MISSION
                         RCLCPP_INFO(get_logger(), "State transitioned to MISSION with Fields2Cover path");
 
                         // Reset flags
