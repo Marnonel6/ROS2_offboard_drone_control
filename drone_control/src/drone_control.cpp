@@ -37,7 +37,9 @@ enum class State {
     MISSION,
     LAND,
     RTL,
-    FAIL
+    FAIL,
+    LIMBO,
+    ERROR
 };
 
 class DroneControl : public rclcpp::Node
@@ -149,8 +151,6 @@ private:
         vehicle_position_.x = ros_enu(0);
         vehicle_position_.y = ros_enu(1);
         vehicle_position_.z = ros_enu(2);
-        // TODO orientation from PX4 to ROS
-        // Look at path_planning vehicle_odometry_callback function
     }
 
     /**
@@ -458,7 +458,7 @@ private:
                     // Arm the vehicle
                     arm();
 
-                    // Check if state transitioned to offboard and that the drone is armed
+                    // Check if drone/px4 state transitioned to offboard and that the drone is armed
                     if (vehicle_status_.flag_armed == true &&
                         vehicle_status_.flag_control_offboard_enabled == true)
                     {
@@ -558,14 +558,34 @@ private:
             // LAND at current position state
             case State::LAND:
                 land();
+                // Check if drone mode has switched to Land mode
+                if (vehicle_status_.flag_control_offboard_enabled == false &&
+                    vehicle_status_.flag_control_auto_enabled == true)
+                    {
+                        // Change state to LIMBO
+                        current_state_ = State::LIMBO;
+                        RCLCPP_INFO(get_logger(), "State transitioned to LIMBO");
+                    }
                 break;
             // Return to launch
             case State::RTL:
                 RTL();
+                // Check if drone mode has switched to RTL mode
+                if (vehicle_status_.flag_control_offboard_enabled == false &&
+                    vehicle_status_.flag_control_auto_enabled == true)
+                    {
+                        // Change state to LIMBO
+                        current_state_ = State::LIMBO;
+                        RCLCPP_INFO(get_logger(), "State transitioned to LIMBO");
+                    }
                 break;
             // Emergency error state
             case State::FAIL:
-                RTL();
+                current_state_ = State::LAND;
+                break;
+            // Limbo state
+            case State::LIMBO:
+                // Stuck in LIMBO -> Do nothing
                 break;
             // Default state
             default:
