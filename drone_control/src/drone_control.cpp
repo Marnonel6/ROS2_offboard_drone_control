@@ -424,7 +424,8 @@ private:
      * @param degrees Angle in [Deg]
      * @return Angle in radians
     */
-    double degreesToRadians(double degrees) {
+    double degreesToRadians(double degrees)
+    {
         return degrees * (M_PI / 180.0);
     }
     ///
@@ -432,6 +433,18 @@ private:
     /// LIBRARY functions later!!
     ///
     ///
+
+    void check_pilot_state_switch()
+    {
+        // Check if drone mode has been switched by pilot then go to limbo state
+        if (vehicle_status_.flag_control_offboard_enabled == false &&
+            vehicle_status_.flag_control_auto_enabled == true)
+            {
+                // Change state to LIMBO
+                current_state_ = State::LIMBO;
+                RCLCPP_INFO(get_logger(), "Pilot switched state! State transitioned to LIMBO");
+            }
+    }
 
     /// \brief Main control timer loop
     void timer_callback()
@@ -473,6 +486,9 @@ private:
                 break;
             // OFFBOARD state -> Take-off and hover at 5m
             case State::OFFBOARD:
+                // Check if drone mode has been switched by pilot then go to limbo state
+                check_pilot_state_switch();
+
                 // Off-board control mode
                 publish_offboard_control_mode();
                 // Take-off and hover at 5[m]
@@ -507,6 +523,9 @@ private:
                 break;
             // Mission path with Fields2Cover
             case State::MISSION:
+                // Check if drone mode has been switched by pilot then go to limbo state
+                check_pilot_state_switch();
+
                 // Off-board control mode
                 publish_offboard_control_mode();
                 // Loop through path and command drone to each point
