@@ -511,8 +511,8 @@ private:
                     if (flag_timer_done_)
                     {
                         // Change state to MISSION
-                        // current_state_ = State::MISSION;
-                        current_state_ = State::LAND; // TODO Change back to MISSION
+                        current_state_ = State::MISSION;
+                        // current_state_ = State::LAND; // TODO Change back to MISSION
                         RCLCPP_INFO(get_logger(), "State transitioned to MISSION with Fields2Cover path");
 
                         // Reset flags
