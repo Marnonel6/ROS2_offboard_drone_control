@@ -61,16 +61,6 @@ public:
         // Get params - Read params from yaml file that is passed in the launch file
         int frequency = get_parameter("frequency").get_parameter_value().get<int>();
 
-        //
-        // TODO waypoint should be read in from a .json
-        //
-        // Hover at 5[m]
-        waypoint_0_.z = 5;
-        // Add all waypoint to the vector
-        waypoints_.push_back(waypoint_0_);
-
-        // Initialize variables
-
         // Create publishers
         offboard_control_publisher_ = create_publisher<px4_msgs::msg::OffboardControlMode>(
             "/fmu/in/offboard_control_mode", 10);
@@ -93,6 +83,10 @@ public:
             "/f2c_path", qos, std::bind(&DroneControl::path_callback,
             this, std::placeholders::_1)
         );
+        vehicle_pose_subscriber_ = create_subscription<geometry_msgs::msg::PoseStamped>(
+            "/vehicle_pose", qos, std::bind(&DroneControl::pose_callback,
+            this, std::placeholders::_1)
+        );
 
         // Create timer
         timer_ = create_wall_timer(milliseconds(1000 / frequency),
@@ -110,7 +104,7 @@ private:
     nav_msgs::msg::Path f2c_path_ros_; // Fields2Cover path in ROS coordinates frame
     px4_msgs::msg::VehicleControlMode vehicle_status_; // Drone status flags
     size_t global_i_ = 0; // global counter for f2c_path_ros_
-    double position_tolerance_ = 1.0; // [m]
+    double position_tolerance_ = 0.5; // [m]
 
     // Flags
     mutable std::mutex mutex_; // Used in the Non-block wait thread timer
@@ -118,11 +112,18 @@ private:
     bool has_executed_ = false;  // Flag to check if the code has executed before
     bool flag_next_waypoint_ = true; // Send the next waypoint in path
     bool flag_mission_ = false; // Flag that turns true if a mission is ready
+    bool flag_vehicle_odometry_ = false; // Wait until vehicle odometry is available
+    bool flag_take_off_position = false; // Set take-off position once
 
     //
     // TODO waypoint should be read in from a .json
     //
-    geometry_msgs::msg::Point waypoint_0_ = geometry_msgs::msg::Point{};
+    geometry_msgs::msg::Point take_off_waypoint = geometry_msgs::msg::Point{};
+    double drone_yaw_ros_;
+    double take_off_heading_;
+
+    // Take-off height
+    float take_off_height = 5.0; // [m]
 
     // Create objects
     rclcpp::TimerBase::SharedPtr timer_;
@@ -132,6 +133,7 @@ private:
     rclcpp::Subscription<px4_msgs::msg::VehicleOdometry>::SharedPtr vehicle_odometry_subscriber_;
     rclcpp::Subscription<px4_msgs::msg::VehicleControlMode>::SharedPtr vehicle_control_mode_subscriber_;
     rclcpp::Subscription<nav_msgs::msg::Path>::SharedPtr path_subscriber_;
+    rclcpp::Subscription<geometry_msgs::msg::PoseStamped>::SharedPtr vehicle_pose_subscriber_;
 
     /**
      * @brief Vehicle odometry subscriber callback
@@ -139,6 +141,7 @@ private:
     */
     void vehicle_odometry_callback(const px4_msgs::msg::VehicleOdometry::UniquePtr msg)
     {
+        // TODO do not use this anymore just use pose_callback() topic:/vehicle_pose
         // Convert from PX4 to ROS coordinates
         // Position
         Eigen::Vector3d px4_ned;
@@ -172,6 +175,25 @@ private:
         // Save Fields2Cover path
         f2c_path_ros_ = msg;
         flag_mission_ = true;
+    }
+
+    /**
+     * @brief Vehicle pose subscriber callback
+     *
+    */
+    void pose_callback(const geometry_msgs::msg::PoseStamped::UniquePtr msg)
+    {
+        // Save vehicle position
+        // vehicle_position_ = msg->pose.position;
+
+        // Drone take-off heading from quaternion
+        tf2::Quaternion tf_q;
+        tf2::fromMsg(msg->pose.orientation, tf_q);
+        tf2::Matrix3x3 m(tf_q);
+        double roll, pitch, yaw;
+        m.getRPY(roll, pitch, yaw);
+        drone_yaw_ros_ = yaw;
+        flag_vehicle_odometry_ = true;
     }
 
     /**
@@ -446,6 +468,23 @@ private:
             }
     }
 
+    /**
+     * @brief Set take-off waypoint
+     * 
+     * Set take-off waypoint to current drone position
+    */
+    void set_take_off_waypoint()
+    {
+        // Only do this once
+        if (!flag_take_off_position){
+            take_off_waypoint.x = vehicle_position_.x;
+            take_off_waypoint.y = vehicle_position_.y;
+            take_off_waypoint.z = take_off_height;
+            take_off_heading_ = drone_yaw_ros_;
+        }
+        flag_take_off_position = true;
+    }
+
     /// \brief Main control timer loop
     void timer_callback()
     {
@@ -453,31 +492,37 @@ private:
         {
             // IDLE state -> ARM and Set OFFBOARD mode
             case State::IDLE:
-                publish_offboard_control_mode();
-                // Take-off and hover at 5[m]
-                // TODO change to take-off 5m above CURRENT position
-                publish_trajectory_setpoint({static_cast<float>(waypoints_.at(0).x), 
-                                             static_cast<float>(waypoints_.at(0).y),
-                                             static_cast<float>(waypoints_.at(0).z)},
-                                            {0.1, 0.1, 0.1}, 0);
+                // Wait for vehicle odometry
+                if (flag_vehicle_odometry_)
+                {
+                    // Set take-off waypoint
+                    set_take_off_waypoint();
+                    // Off-board control mode
+                    publish_offboard_control_mode();
+                    // Take-off and hover at 5[m] at current drone position
+                    publish_trajectory_setpoint({static_cast<float>(take_off_waypoint.x),
+                                                 static_cast<float>(take_off_waypoint.y),
+                                                 static_cast<float>(take_off_waypoint.z)},
+                                                 {0.1, 0.1, 0.1}, static_cast<float>(take_off_heading_));
+                                                 // TODO set angle to current angle before take-off
 
-                if (offboard_setpoint_counter_ >= 200 && flag_mission_) {
-                    // Change to off-board mode after 200 setpoints
-                    // TODO WHY DO I HAVE TO DO THIS AND DO I NEED TO ADD THIS TO OTHERS
-                    publish_vehicle_command(px4_msgs::msg::VehicleCommand::VEHICLE_CMD_DO_SET_MODE, 1, 6);
+                    if (offboard_setpoint_counter_ >= 200 && flag_mission_) {
+                        // Change to off-board mode after 200 setpoints
+                        publish_vehicle_command(px4_msgs::msg::VehicleCommand::VEHICLE_CMD_DO_SET_MODE, 1, 6);
 
-                    RCLCPP_INFO_STREAM(get_logger(), "Sent Vehicle Command");
+                        RCLCPP_INFO_STREAM(get_logger(), "Sent Vehicle Command");
 
-                    // Arm the vehicle
-                    arm();
+                        // Arm the vehicle
+                        arm();
 
-                    // Check if drone/px4 state transitioned to offboard and that the drone is armed
-                    if (vehicle_status_.flag_armed == true &&
-                        vehicle_status_.flag_control_offboard_enabled == true)
-                    {
-                        // Change state to OFFBOARD
-                        current_state_ = State::OFFBOARD;
-                        RCLCPP_INFO(get_logger(), "State transitioned to OFFBOARD");
+                        // Check if drone/px4 state transitioned to offboard and that the drone is armed
+                        if (vehicle_status_.flag_armed == true &&
+                            vehicle_status_.flag_control_offboard_enabled == true)
+                        {
+                            // Change state to OFFBOARD
+                            current_state_ = State::OFFBOARD;
+                            RCLCPP_INFO(get_logger(), "State transitioned to OFFBOARD");
+                        }
                     }
                 }
 
@@ -491,14 +536,15 @@ private:
 
                 // Off-board control mode
                 publish_offboard_control_mode();
-                // Take-off and hover at 5[m]
-                publish_trajectory_setpoint({static_cast<float>(waypoints_.at(0).x), 
-                                             static_cast<float>(waypoints_.at(0).y),
-                                             static_cast<float>(waypoints_.at(0).z)},
-                                             {0.1, 0.1, 0.1}, 0);
+                // Take-off and hover at 5[m] at current drone position
+                publish_trajectory_setpoint({static_cast<float>(take_off_waypoint.x), 
+                                             static_cast<float>(take_off_waypoint.y),
+                                             static_cast<float>(take_off_waypoint.z)},
+                                             {0.1, 0.1, 0.1}, static_cast<float>(take_off_heading_));
+                                             // TODO set angle to current angle before take-off
 
                 // Check if the setpoint has been reached in a specified tolerance
-                if (reached_setpoint(waypoints_.at(0), vehicle_position_, 2.0))
+                if (reached_setpoint(take_off_waypoint, vehicle_position_, 2.0))
                 {
                     // nonBlockingWait timer
                     if (!has_executed_)
@@ -567,7 +613,7 @@ private:
                             // Land when path is done
                             if (global_i_ >= f2c_path_ros_.poses.size())
                             {
-                                current_state_ = State::LAND;
+                                current_state_ = State::RTL; // NOTE Was LAND
                                 RCLCPP_INFO(get_logger(), "State transitioned to LAND");
                             }
                         }
