@@ -104,8 +104,8 @@ private:
         // Define field and robot
         F2CRobot robot (2.0, 4.0);
         // NOTE: The z-height that is specified here gets halved in the path for some reason
-        F2CCells field(F2CCell(F2CLinearRing({F2CPoint(5,5,10), F2CPoint(5,15,10), F2CPoint(15,15,10),
-                                              F2CPoint(15,5,10), F2CPoint(5,5,10)})));
+        F2CCells field(F2CCell(F2CLinearRing({F2CPoint(5,5,10), F2CPoint(5,30,10), F2CPoint(60,30,10),
+                                              F2CPoint(60,5,10), F2CPoint(5,5,10)})));
         // Swath generation
         f2c::sg::BruteForce bf;
         f2c::obj::NSwath n_swath_obj;
@@ -114,14 +114,15 @@ private:
         auto boustrophedon_swaths = boustrophedon_sorter.genSortedSwaths(swaths, 1);
         // Path planner
         f2c::pp::PathPlanning path_planner;
-        robot.setMinRadius(2.0);  // m
+        robot.setMinRadius(0.0); // 2.0);  // m
         // Create swath connections using Dubins curves with Continuous curvature
-        f2c::pp::DubinsCurvesCC dubins_cc;
-        F2CPath path_dubins_cc = path_planner.searchBestPath(robot, boustrophedon_swaths, dubins_cc);
+        // f2c::pp::DubinsCurvesCC dubins_cc;
+        f2c::pp::ReedsSheppCurves reeds_shepp;
+        F2CPath path_dubins_cc = path_planner.searchBestPath(robot, boustrophedon_swaths, reeds_shepp);
         // Discretize the turns -> Specify significant number precision (This does not override the path)
         // path_dubins_cc.serializePath(3);
         // Discretize swath lines in path object -> Specify the step size for the swath section
-        double discretize_step_size = 0.1; // Step size for discretization in [m]
+        double discretize_step_size = 0.3; // Step size for discretization in [m]
         F2CPath new_path = path_dubins_cc.discretize_swath(discretize_step_size);
         // Save to file
         // new_path.saveToFile("discretized_swath_path.csv", 3); // Specify precision to the significant number
@@ -130,7 +131,7 @@ private:
         // f2c::Visualizer::plot(field);
         // f2c::Visualizer::plot(new_path);
         // f2c::Visualizer::plot(boustrophedon_swaths);
-        // f2c::Visualizer::show(); # NOTE displays the path
+        // f2c::Visualizer::show(); // NOTE displays the path
 
         return new_path;
     }
