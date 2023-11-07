@@ -32,6 +32,7 @@ using namespace std::chrono_literals;
 
 // State machine states
 enum class State {
+    PREFLIGHT,
     IDLE,
     OFFBOARD,
     MISSION,
@@ -97,7 +98,7 @@ private:
     // Variables
     size_t offboard_setpoint_counter_ = 0;   // Counter for the number of setpoints sent
     float test_counter_ = 0;                 // TODO delete
-    State current_state_ = State::IDLE;      // Current state machine state
+    State current_state_ = State::PREFLIGHT;      // Current state machine state
     // Vehicle position from fmu/out/vehicle_odometry -> Init to all zeros
     geometry_msgs::msg::Point vehicle_position_ = geometry_msgs::msg::Point{};
     std::vector<geometry_msgs::msg::Point> waypoints_;
@@ -105,6 +106,11 @@ private:
     px4_msgs::msg::VehicleControlMode vehicle_status_; // Drone status flags
     size_t global_i_ = 0; // global counter for f2c_path_ros_
     double position_tolerance_ = 0.5; // [m]
+    geometry_msgs::msg::Point take_off_waypoint = geometry_msgs::msg::Point{};
+    double drone_yaw_ros_;
+    double take_off_heading_;
+    float take_off_height = 5.0; // Take-off height [m]
+    geometry_msgs::msg::Point vehicle_position_ros_ = geometry_msgs::msg::Point{};
 
     // Flags
     mutable std::mutex mutex_; // Used in the Non-block wait thread timer
@@ -114,16 +120,6 @@ private:
     bool flag_mission_ = false; // Flag that turns true if a mission is ready
     bool flag_vehicle_odometry_ = false; // Wait until vehicle odometry is available
     bool flag_take_off_position = false; // Set take-off position once
-
-    //
-    // TODO waypoint should be read in from a .json
-    //
-    geometry_msgs::msg::Point take_off_waypoint = geometry_msgs::msg::Point{};
-    double drone_yaw_ros_;
-    double take_off_heading_;
-
-    // Take-off height
-    float take_off_height = 5.0; // [m]
 
     // Create objects
     rclcpp::TimerBase::SharedPtr timer_;
@@ -184,7 +180,7 @@ private:
     void pose_callback(const geometry_msgs::msg::PoseStamped::UniquePtr msg)
     {
         // Save vehicle position
-        // vehicle_position_ = msg->pose.position;
+        vehicle_position_ros_ = msg->pose.position;
 
         // Drone take-off heading from quaternion
         tf2::Quaternion tf_q;
@@ -485,44 +481,82 @@ private:
         flag_take_off_position = true;
     }
 
+    /**
+     * @brief Check if drone is at the startup position (Within a threshold)
+     * 
+     * @return (bool) True if drone is at startup position
+    */
+    bool check_drone_startup_position()
+    {
+        // Check if drone is at startup position
+        float tolerance = 0.5;
+        if (vehicle_position_ros_.x < tolerance && vehicle_position_ros_.x > -tolerance)
+        {
+            if (vehicle_position_ros_.y < tolerance && vehicle_position_ros_.y > -tolerance)
+            {
+                if (vehicle_position_ros_.z < tolerance && vehicle_position_ros_.z > 0.0)
+                {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
     /// \brief Main control timer loop
     void timer_callback()
     {
         switch (current_state_)
         {
-            // IDLE state -> ARM and Set OFFBOARD mode
-            case State::IDLE:
+            // PREFLIGHT state -> Do preflight checklist
+            case State::PREFLIGHT:
                 // Wait for vehicle odometry
                 if (flag_vehicle_odometry_)
                 {
-                    // Set take-off waypoint
-                    set_take_off_waypoint();
-                    // Off-board control mode
-                    publish_offboard_control_mode();
-                    // Take-off and hover at 5[m] at current drone position
-                    publish_trajectory_setpoint({static_cast<float>(take_off_waypoint.x),
-                                                 static_cast<float>(take_off_waypoint.y),
-                                                 static_cast<float>(take_off_waypoint.z)},
-                                                 {0.1, 0.1, 0.1}, static_cast<float>(take_off_heading_));
-                                                 // TODO set angle to current angle before take-off
+                    // Check if drone is at startup position
+                    if (check_drone_startup_position())
+                    {
+                        // Set take-off waypoint
+                        set_take_off_waypoint();
 
-                    if (offboard_setpoint_counter_ >= 200 && flag_mission_) {
-                        // Change to off-board mode after 200 setpoints
-                        publish_vehicle_command(px4_msgs::msg::VehicleCommand::VEHICLE_CMD_DO_SET_MODE, 1, 6);
+                        // Change state to IDLE
+                        current_state_ = State::IDLE;
+                    }
+                    else
+                    {
+                        // ROS stream error message with drone x, y, z position
+                        RCLCPP_ERROR_STREAM(get_logger(), "Drone is not at startup position! x: " <<
+                                            vehicle_position_ros_.x << " y: " << vehicle_position_ros_.y <<
+                                            " z: " << vehicle_position_ros_.z);
+                    }
+                }
+                break;
+            // IDLE state -> ARM and Set OFFBOARD mode
+            case State::IDLE:
+                // Off-board control mode
+                publish_offboard_control_mode();
+                // Take-off and hover at 5[m] at current drone position
+                publish_trajectory_setpoint({static_cast<float>(take_off_waypoint.x),
+                                             static_cast<float>(take_off_waypoint.y),
+                                             static_cast<float>(take_off_waypoint.z)},
+                                             {0.1, 0.1, 0.1}, static_cast<float>(take_off_heading_));
 
-                        RCLCPP_INFO_STREAM(get_logger(), "Sent Vehicle Command");
+                if (offboard_setpoint_counter_ >= 200 && flag_mission_) {
+                    // Change to off-board mode after 200 setpoints
+                    publish_vehicle_command(px4_msgs::msg::VehicleCommand::VEHICLE_CMD_DO_SET_MODE, 1, 6);
 
-                        // Arm the vehicle
-                        arm();
+                    RCLCPP_INFO_STREAM(get_logger(), "Sent Vehicle Command");
 
-                        // Check if drone/px4 state transitioned to offboard and that the drone is armed
-                        if (vehicle_status_.flag_armed == true &&
-                            vehicle_status_.flag_control_offboard_enabled == true)
-                        {
-                            // Change state to OFFBOARD
-                            current_state_ = State::OFFBOARD;
-                            RCLCPP_INFO(get_logger(), "State transitioned to OFFBOARD");
-                        }
+                    // Arm the vehicle
+                    arm();
+
+                    // Check if drone/px4 state transitioned to offboard and that the drone is armed
+                    if (vehicle_status_.flag_armed == true &&
+                        vehicle_status_.flag_control_offboard_enabled == true)
+                    {
+                        // Change state to OFFBOARD
+                        current_state_ = State::OFFBOARD;
+                        RCLCPP_INFO(get_logger(), "State transitioned to OFFBOARD");
                     }
                 }
 
@@ -541,7 +575,6 @@ private:
                                              static_cast<float>(take_off_waypoint.y),
                                              static_cast<float>(take_off_waypoint.z)},
                                              {0.1, 0.1, 0.1}, static_cast<float>(take_off_heading_));
-                                             // TODO set angle to current angle before take-off
 
                 // Check if the setpoint has been reached in a specified tolerance
                 if (reached_setpoint(take_off_waypoint, vehicle_position_, 2.0))
