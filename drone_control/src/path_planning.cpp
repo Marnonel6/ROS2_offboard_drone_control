@@ -104,8 +104,8 @@ private:
         // Define field and robot
         F2CRobot robot (2.0, 4.0);
         // NOTE: The z-height that is specified here gets halved in the path for some reason
-        F2CCells field(F2CCell(F2CLinearRing({F2CPoint(5,5,10), F2CPoint(5,30,10), F2CPoint(60,30,10),
-                                              F2CPoint(60,5,10), F2CPoint(5,5,10)})));
+        F2CCells field(F2CCell(F2CLinearRing({F2CPoint(5,5,10), F2CPoint(5,35,10), F2CPoint(45,35,10),
+                                              F2CPoint(45,5,10), F2CPoint(5,5,10)})));
         // Swath generation
         f2c::sg::BruteForce bf;
         f2c::obj::NSwath n_swath_obj;
@@ -126,7 +126,7 @@ private:
         F2CPath new_path = path_dubins_cc.discretize_swath(discretize_step_size);
         // Save to file
         // new_path.saveToFile("discretized_swath_path.csv", 3); // Specify precision to the significant number
-        // // Visualize
+        // Visualize
         // f2c::Visualizer::figure();
         // f2c::Visualizer::plot(field);
         // f2c::Visualizer::plot(new_path);
