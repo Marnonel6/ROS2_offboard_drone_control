@@ -122,11 +122,11 @@ private:
         // Discretize the turns -> Specify significant number precision (This does not override the path)
         // path_dubins_cc.serializePath(3);
         // Discretize swath lines in path object -> Specify the step size for the swath section
-        double discretize_step_size = 0.3; // Step size for discretization in [m]
+        double discretize_step_size = 0.1; // Step size for discretization in [m]
         F2CPath new_path = path_dubins_cc.discretize_swath(discretize_step_size);
         // Save to file
         // new_path.saveToFile("discretized_swath_path.csv", 3); // Specify precision to the significant number
-        // Visualize
+        // // Visualize
         // f2c::Visualizer::figure();
         // f2c::Visualizer::plot(field);
         // f2c::Visualizer::plot(new_path);

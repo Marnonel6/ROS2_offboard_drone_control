@@ -49,6 +49,7 @@ public:
     DroneControl() : Node("drone_control")
     {
         RCLCPP_INFO_STREAM(get_logger(), "Init Node");
+        RCLCPP_INFO_STREAM(get_logger(), "State transitioned to PREFLIGHT");
 
         // QoS settings
         rmw_qos_profile_t qos_profile = rmw_qos_profile_sensor_data;
@@ -489,12 +490,12 @@ private:
     bool check_drone_startup_position()
     {
         // Check if drone is at startup position
-        float tolerance = 0.5;
+        float tolerance = 1.0;
         if (vehicle_position_ros_.x < tolerance && vehicle_position_ros_.x > -tolerance)
         {
             if (vehicle_position_ros_.y < tolerance && vehicle_position_ros_.y > -tolerance)
             {
-                if (vehicle_position_ros_.z < tolerance && vehicle_position_ros_.z > 0.0)
+                if (vehicle_position_ros_.z < tolerance && vehicle_position_ros_.z > -tolerance)
                 {
                     return true;
                 }
