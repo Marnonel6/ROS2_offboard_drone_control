@@ -82,8 +82,8 @@ private:
     // Vehicle pose from fmu/out/vehicle_odometry
     geometry_msgs::msg::PoseStamped vehicle_pose_px4_;
     geometry_msgs::msg::PoseStamped vehicle_pose_ros_;
-    geometry_msgs::msg::Pose home_pose_ = geometry_msgs::msg::Pose{};
-    geometry_msgs::msg::Pose hover_home_pose_ = geometry_msgs::msg::Pose{}; // 5[m] above home pose
+    geometry_msgs::msg::Pose actual_home_pose_ = geometry_msgs::msg::Pose{}; // Non-zero starting position
+    geometry_msgs::msg::Pose hover_home_pose_ = geometry_msgs::msg::Pose{}; // 5[m] above ideal [0,0,0] -> [x,y,z] starting position
 
     // Flags
     bool flag_vehicle_odometry_ = false;
@@ -102,10 +102,10 @@ private:
     {
         // Use Fields2Cover
         // Define field and robot
-        F2CRobot robot (2.0, 4.0);
+        F2CRobot robot (2.0, 2.0);
         // NOTE: The z-height that is specified here gets halved in the path for some reason
-        F2CCells field(F2CCell(F2CLinearRing({F2CPoint(5,5,10), F2CPoint(5,35,10), F2CPoint(45,35,10),
-                                              F2CPoint(45,5,10), F2CPoint(5,5,10)})));
+        F2CCells field(F2CCell(F2CLinearRing({F2CPoint(5,5,6), F2CPoint(5,25,6), F2CPoint(35,25,6),
+                                              F2CPoint(35,5,6), F2CPoint(5,5,6)})));
         // Swath generation
         f2c::sg::BruteForce bf;
         f2c::obj::NSwath n_swath_obj;
@@ -122,16 +122,16 @@ private:
         // Discretize the turns -> Specify significant number precision (This does not override the path)
         // path_dubins_cc.serializePath(3);
         // Discretize swath lines in path object -> Specify the step size for the swath section
-        double discretize_step_size = 0.1; // Step size for discretization in [m]
+        double discretize_step_size = 1.0; // 0.1 // Step size for discretization in [m]
         F2CPath new_path = path_dubins_cc.discretize_swath(discretize_step_size);
         // Save to file
         // new_path.saveToFile("discretized_swath_path.csv", 3); // Specify precision to the significant number
         // Visualize
-        // f2c::Visualizer::figure();
-        // f2c::Visualizer::plot(field);
-        // f2c::Visualizer::plot(new_path);
-        // f2c::Visualizer::plot(boustrophedon_swaths);
-        // f2c::Visualizer::show(); // NOTE displays the path
+        f2c::Visualizer::figure();
+        f2c::Visualizer::plot(field);
+        f2c::Visualizer::plot(new_path);
+        f2c::Visualizer::plot(boustrophedon_swaths);
+        f2c::Visualizer::show(); // NOTE displays the path
 
         return new_path;
     }
@@ -402,9 +402,11 @@ private:
                 if (flag_vehicle_odometry_)
                 {
                     // Save the drones HOME position and Hover home position
-                    home_pose_ = vehicle_pose_ros_.pose;
-                    hover_home_pose_ = home_pose_;
-                    hover_home_pose_.position.z = 5; // 5[m] above home pose
+                    actual_home_pose_ = vehicle_pose_ros_.pose;
+                    // hover_home_pose_ = home_pose_;
+                    hover_home_pose_.position.x = 0;
+                    hover_home_pose_.position.y = 0;
+                    hover_home_pose_.position.z = 3; // 3[m] above home pose
                     // Change state to path planning
                     current_state_ = State::PATH_PLANNING;
                     RCLCPP_INFO_STREAM(get_logger(), "State: PATH_PLANNING");
@@ -415,7 +417,7 @@ private:
                 f2c_path_ = path_planning();
 
                 // TODO Create take-off path to the height of the Fields2Cover path
-                // For now just take-off is a setpoint at 5[m]
+                // For now just take-off is a setpoint at 3[m]
 
                 // Create path from hover to start of Fields2Cover path
                 plan_straight_path(path_, hover_home_pose_,
