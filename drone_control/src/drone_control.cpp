@@ -70,6 +70,8 @@ public:
             "/fmu/in/trajectory_setpoint", 10);
         vehicle_command_publisher_ = create_publisher<px4_msgs::msg::VehicleCommand>(
             "/fmu/in/vehicle_command", 10);
+        home_position_publisher_ = create_publisher<geometry_msgs::msg::Point>(
+            "/home_position", 10);
 
         // Create subscribers
         vehicle_odometry_subscriber_ = create_subscription<px4_msgs::msg::VehicleOdometry>(
@@ -107,11 +109,13 @@ private:
     px4_msgs::msg::VehicleControlMode vehicle_status_; // Drone status flags
     size_t global_i_ = 0; // global counter for f2c_path_ros_
     double position_tolerance_ = 0.5; // [m]
-    geometry_msgs::msg::Point take_off_waypoint = geometry_msgs::msg::Point{};
+    geometry_msgs::msg::Point take_off_waypoint = geometry_msgs::msg::Point{}; // In ROS coordinates
+    geometry_msgs::msg::Point home_position_ros_ = geometry_msgs::msg::Point{}; // In ROS coordinates
     double drone_yaw_ros_;
     double take_off_heading_;
-    float take_off_height = 5.0; // Take-off height [m]
+    float take_off_height = 3.0; // Take-off height [m]
     geometry_msgs::msg::Point vehicle_position_ros_ = geometry_msgs::msg::Point{};
+    geometry_msgs::msg::Point path_moved_to_drone_local_coordinates_ = geometry_msgs::msg::Point{};
 
     // Flags
     mutable std::mutex mutex_; // Used in the Non-block wait thread timer
@@ -127,6 +131,7 @@ private:
     rclcpp::Publisher<px4_msgs::msg::OffboardControlMode>::SharedPtr offboard_control_publisher_;
     rclcpp::Publisher<px4_msgs::msg::TrajectorySetpoint>::SharedPtr trajectory_setpoint_publisher_;
     rclcpp::Publisher<px4_msgs::msg::VehicleCommand>::SharedPtr vehicle_command_publisher_;
+    rclcpp::Publisher<geometry_msgs::msg::Point>::SharedPtr home_position_publisher_;
     rclcpp::Subscription<px4_msgs::msg::VehicleOdometry>::SharedPtr vehicle_odometry_subscriber_;
     rclcpp::Subscription<px4_msgs::msg::VehicleControlMode>::SharedPtr vehicle_control_mode_subscriber_;
     rclcpp::Subscription<nav_msgs::msg::Path>::SharedPtr path_subscriber_;
@@ -210,13 +215,13 @@ private:
     }
 
     /**
-     * @brief Publish a trajectory setpoint
+     * @brief Publish a trajectory set point
      *        For this example, it sends a trajectory setpoint to make the
      *        vehicle hover at 5 meters with a yaw angle of 180 degrees.
      * 
      * @param position - IN ROS COORDINATE SYSTEM - (x: North, y: East, z: Down)
-     * @param velocity
-     * @param yaw
+     * @param velocity - Velocity vector at the set point position
+     * @param yaw      - Desired yaw now
      * 
      * Reference:
      *    Coordinate frame: https://docs.px4.io/main/en/ros/ros2_comm.html#ros-2-px4-frame-conventions
@@ -474,10 +479,16 @@ private:
     {
         // Only do this once
         if (!flag_take_off_position){
+            // Set take-off waypoint in ROS coordinates
             take_off_waypoint.x = vehicle_position_.x;
             take_off_waypoint.y = vehicle_position_.y;
-            take_off_waypoint.z = take_off_height;
+            take_off_waypoint.z = vehicle_position_.z + take_off_height;
             take_off_heading_ = drone_yaw_ros_;
+
+            // Landing pad home position in ROS coordinates
+            home_position_ros_.x = vehicle_position_.x;
+            home_position_ros_.y = vehicle_position_.y;
+            home_position_ros_.z = vehicle_position_.z;
         }
         flag_take_off_position = true;
     }
@@ -490,12 +501,13 @@ private:
     bool check_drone_startup_position()
     {
         // Check if drone is at startup position
-        float tolerance = 1.0;
-        if (vehicle_position_ros_.x < tolerance && vehicle_position_ros_.x > -tolerance)
+        float tolerance_xy = 5.0;
+        float tolerance_z = 1.5;
+        if (vehicle_position_ros_.x < tolerance_xy && vehicle_position_ros_.x > -tolerance_xy)
         {
-            if (vehicle_position_ros_.y < tolerance && vehicle_position_ros_.y > -tolerance)
+            if (vehicle_position_ros_.y < tolerance_xy && vehicle_position_ros_.y > -tolerance_xy)
             {
-                if (vehicle_position_ros_.z < tolerance && vehicle_position_ros_.z > -tolerance)
+                if (vehicle_position_ros_.z < tolerance_z && vehicle_position_ros_.z > -tolerance_z)
                 {
                     return true;
                 }
@@ -504,9 +516,40 @@ private:
         return false;
     }
 
+
+    /**
+     * @brief Update the path to the take-off position
+     * 
+     * Moves the mission setpoint to the drone take-off position to ensure it is in
+     * the correct frame as the drone does not always start at [0,0,0] - [x,y,z]
+     * local coordinates, but the path/mission assume it does.
+     * 
+     * @param x Path x position
+     * @param y Path y position
+     * @param z Path z position
+     * @return geometry_msgs::msg::Point Updated path to zero drone take-off position
+    */
+    geometry_msgs::msg::Point path_update_to_takeoff_position(double x, double y, double z)
+    {
+        // Update path
+        geometry_msgs::msg::Point point;
+        point.x = x + home_position_ros_.x;
+        point.y = y + home_position_ros_.y;
+        point.z = z + home_position_ros_.z;
+        return point;
+    }
+
     /// \brief Main control timer loop
     void timer_callback()
     {
+        // Publish home_position
+        if (flag_take_off_position)
+        {
+            // Minus hover/take-off height and save to home position variable
+            home_position_publisher_->publish(home_position_ros_);
+        }
+
+        // State machine
         switch (current_state_)
         {
             // PREFLIGHT state -> Do preflight checklist
@@ -575,10 +618,10 @@ private:
                 publish_trajectory_setpoint({static_cast<float>(take_off_waypoint.x), 
                                              static_cast<float>(take_off_waypoint.y),
                                              static_cast<float>(take_off_waypoint.z)},
-                                             {0.1, 0.1, 0.1}, static_cast<float>(take_off_heading_));
+                                             {0.0, 0.0, 0.0}, static_cast<float>(take_off_heading_));
 
                 // Check if the setpoint has been reached in a specified tolerance
-                if (reached_setpoint(take_off_waypoint, vehicle_position_, 2.0))
+                if (reached_setpoint(take_off_waypoint, vehicle_position_, position_tolerance_))
                 {
                     // nonBlockingWait timer
                     if (!has_executed_)
@@ -617,16 +660,26 @@ private:
                     tf2::Matrix3x3 m(tf_q);
                     double roll, pitch, yaw_setpoint;
                     m.getRPY(roll, pitch, yaw_setpoint);
-                    publish_trajectory_setpoint({static_cast<float>(f2c_path_ros_.poses.at(global_i_).pose.position.x),
-                                                 static_cast<float>(f2c_path_ros_.poses.at(global_i_).pose.position.y),
-                                                 static_cast<float>(f2c_path_ros_.poses.at(global_i_).pose.position.z)},
+                    // Moves the mission setpoint to the drone take-off position to ensure it is in
+                    // the correct frame as the drone does not always start at [0,0,0] - [x,y,z]
+                    // local coordinates, but the path/mission assume it does.
+                    path_moved_to_drone_local_coordinates_ = path_update_to_takeoff_position(
+                            f2c_path_ros_.poses.at(global_i_).pose.position.x,
+                            f2c_path_ros_.poses.at(global_i_).pose.position.y,
+                            f2c_path_ros_.poses.at(global_i_).pose.position.z);
+                    // Publish set_point
+                    publish_trajectory_setpoint({static_cast<float>(path_moved_to_drone_local_coordinates_.x),
+                                                 static_cast<float>(path_moved_to_drone_local_coordinates_.y),
+                                                 static_cast<float>(path_moved_to_drone_local_coordinates_.z)},
                                                  {0.1, 0.1, 0.1}, yaw_setpoint);
                     flag_next_waypoint_ = false;
                 } else
                 {
                     // Check if the setpoint has been reached in a specified tolerance
-                    if (reached_setpoint(f2c_path_ros_.poses.at(global_i_).pose.position, vehicle_position_,
-                                        position_tolerance_))
+                    // if (reached_setpoint(f2c_path_ros_.poses.at(global_i_).pose.position, vehicle_position_,
+                    //                     position_tolerance_))
+                    if (reached_setpoint(path_moved_to_drone_local_coordinates_, vehicle_position_,
+                                         position_tolerance_))
                     {
                         // nonBlockingWait timer
                         if (!has_executed_)
