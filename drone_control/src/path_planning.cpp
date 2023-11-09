@@ -122,10 +122,10 @@ private:
         // Discretize the turns -> Specify significant number precision (This does not override the path)
         // path_dubins_cc.serializePath(3);
         // Discretize swath lines in path object -> Specify the step size for the swath section
-        double discretize_step_size = 1.0; // 0.1 // Step size for discretization in [m]
+        double discretize_step_size = 0.5; // Step size for discretization in [m]
         F2CPath new_path = path_dubins_cc.discretize_swath(discretize_step_size);
         // Save to file
-        // new_path.saveToFile("discretized_swath_path.csv", 3); // Specify precision to the significant number
+        new_path.saveToFile("discretized_swath_path.csv", 4); // Specify precision to the significant number
         // Visualize
         f2c::Visualizer::figure();
         f2c::Visualizer::plot(field);
@@ -422,7 +422,7 @@ private:
                 // Create path from hover to start of Fields2Cover path
                 plan_straight_path(path_, hover_home_pose_,
                                    PathState_to_Pose(f2c_path_.states.at(0)),
-                                   0.1, "/map");
+                                   0.2, "/map");
 
                 // Convert Fields2Cover path to a nav_msg::msg::path format
                 f2cpath_to_navpath(path_, f2c_path_);
@@ -430,7 +430,7 @@ private:
                 // Create path from end of fields 2 cover to home position
                 plan_straight_path(path_, PathState_to_Pose(f2c_path_.states.back()),
                                    hover_home_pose_,
-                                   0.1, "/map");
+                                   0.2, "/map");
 
                 // Change state to path planned
                 current_state_ = State::PUB_PATH;

@@ -116,6 +116,7 @@ private:
     float take_off_height = 3.0; // Take-off height [m]
     geometry_msgs::msg::Point vehicle_position_ros_ = geometry_msgs::msg::Point{};
     geometry_msgs::msg::Point path_moved_to_drone_local_coordinates_ = geometry_msgs::msg::Point{};
+    geometry_msgs::msg::Point velocity_setpoint_ = geometry_msgs::msg::Point{};
 
     // Flags
     mutable std::mutex mutex_; // Used in the Non-block wait thread timer
@@ -253,7 +254,7 @@ private:
         px4_msgs::msg::TrajectorySetpoint msg{};
         msg.position = position; // (x: North, y: East, z: Down) - (Go up -z)
         msg.velocity = velocity;
-        msg.acceleration = {0.1, 0.1, 0.1};
+        msg.acceleration = {0.0, 0.0, 0.0};
         msg.yaw = yaw; // [-PI:PI]
         msg.yawspeed = 0.174533; // [rad/s] -> 10 [Deg/s]
         msg.timestamp = get_clock()->now().nanoseconds() / 1000;
@@ -516,6 +517,49 @@ private:
         return false;
     }
 
+    /**
+     * @brief Calculate velocity setpoint
+     * 
+     * Calculate the velocity setpoint from the current position and the next waypoint
+     * 
+     * @return geometry_msgs::msg::Point Velocity setpoint
+    */
+    geometry_msgs::msg::Point calculate_velocity_setpoint()
+    {
+        // Calculate velocity setpoint
+        geometry_msgs::msg::Point velocity_setpoint;
+        // Check if the current path and the next n_steps is a swath by comparing the x values
+        // If the x values are the same then the path is a swath
+        // TODO Make this more general
+        int n_steps = 10;
+        // This gives a ground speed of 1 [m/s]
+        double x_vel = 0.5; // NB PX4 x velocity is ROS2 path y anv vice versa
+        if (global_i_ + n_steps < f2c_path_ros_.poses.size() && global_i_ >= 1)
+        {
+            if (f2c_path_ros_.poses.at(global_i_-1).pose.position.x ==
+                f2c_path_ros_.poses.at(global_i_ + n_steps).pose.position.x)
+            {
+                // Determine if y velocity setpoint should be +/-
+                if (f2c_path_ros_.poses.at(global_i_ - 1).pose.position.y <
+                    f2c_path_ros_.poses.at(global_i_ + n_steps).pose.position.y)
+                {
+                    velocity_setpoint.x = x_vel;
+                } else
+                {
+                    velocity_setpoint.x = -x_vel;
+                }
+                velocity_setpoint.y = 0.0; // Along swath no y-velocities
+            }
+        } else // Default velocity setpoint for all paths that are not swaths
+        {
+            velocity_setpoint.x = 0.1;
+            velocity_setpoint.y = 0.1;
+        }
+        // z velocities are always the same in a mission.
+        velocity_setpoint.z = 0.0;
+
+        return velocity_setpoint;
+    }
 
     /**
      * @brief Update the path to the take-off position
@@ -667,11 +711,16 @@ private:
                             f2c_path_ros_.poses.at(global_i_).pose.position.x,
                             f2c_path_ros_.poses.at(global_i_).pose.position.y,
                             f2c_path_ros_.poses.at(global_i_).pose.position.z);
+                    // Calculate velocity setpoint
+                    velocity_setpoint_ = calculate_velocity_setpoint();
                     // Publish set_point
                     publish_trajectory_setpoint({static_cast<float>(path_moved_to_drone_local_coordinates_.x),
                                                  static_cast<float>(path_moved_to_drone_local_coordinates_.y),
                                                  static_cast<float>(path_moved_to_drone_local_coordinates_.z)},
-                                                 {0.1, 0.1, 0.1}, yaw_setpoint);
+                                                {static_cast<float>(velocity_setpoint_.x),
+                                                 static_cast<float>(velocity_setpoint_.y),
+                                                 static_cast<float>(velocity_setpoint_.z)},
+                                                yaw_setpoint);
                     flag_next_waypoint_ = false;
                 } else
                 {
@@ -684,7 +733,7 @@ private:
                         // nonBlockingWait timer
                         if (!has_executed_)
                         {
-                            nonBlockingWait(milliseconds(10));
+                            nonBlockingWait(milliseconds(1));
                             has_executed_ = true;
                         }
 
