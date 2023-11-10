@@ -125,13 +125,13 @@ private:
         double discretize_step_size = 0.5; // Step size for discretization in [m]
         F2CPath new_path = path_dubins_cc.discretize_swath(discretize_step_size);
         // Save to file
-        new_path.saveToFile("discretized_swath_path.csv", 4); // Specify precision to the significant number
+        // new_path.saveToFile("discretized_swath_path.csv", 4); // Specify precision to the significant number
         // Visualize
-        f2c::Visualizer::figure();
-        f2c::Visualizer::plot(field);
-        f2c::Visualizer::plot(new_path);
-        f2c::Visualizer::plot(boustrophedon_swaths);
-        f2c::Visualizer::show(); // NOTE displays the path
+        // f2c::Visualizer::figure();
+        // f2c::Visualizer::plot(field);
+        // f2c::Visualizer::plot(new_path);
+        // f2c::Visualizer::plot(boustrophedon_swaths);
+        // f2c::Visualizer::show(); // NOTE displays the path
 
         return new_path;
     }

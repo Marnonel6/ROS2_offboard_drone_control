@@ -713,6 +713,9 @@ private:
                             f2c_path_ros_.poses.at(global_i_).pose.position.z);
                     // Calculate velocity setpoint
                     velocity_setpoint_ = calculate_velocity_setpoint();
+                    // velocity_setpoint_.x = 0.1;
+                    // velocity_setpoint_.y = 0.1;
+                    // velocity_setpoint_.z = 0.0;
                     // Publish set_point
                     publish_trajectory_setpoint({static_cast<float>(path_moved_to_drone_local_coordinates_.x),
                                                  static_cast<float>(path_moved_to_drone_local_coordinates_.y),
