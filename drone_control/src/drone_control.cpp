@@ -533,7 +533,7 @@ private:
         // TODO Make this more general
         int n_steps = 10;
         // This gives a ground speed of 1 [m/s]
-        double x_vel = 0.5; // NB PX4 x velocity is ROS2 path y anv vice versa
+        double x_vel = 0.1; // 0.5; // NB PX4 x velocity is ROS2 path y anv vice versa
         if (global_i_ + n_steps < f2c_path_ros_.poses.size() && global_i_ >= 1)
         {
             if (f2c_path_ros_.poses.at(global_i_-1).pose.position.x ==
@@ -608,7 +608,7 @@ private:
                         set_take_off_waypoint();
 
                         // Change state to IDLE
-                        current_state_ = State::IDLE;
+                        // current_state_ = State::IDLE; // TODO NOTE UNCOMMENT !!!
                     }
                     else
                     {
@@ -713,9 +713,6 @@ private:
                             f2c_path_ros_.poses.at(global_i_).pose.position.z);
                     // Calculate velocity setpoint
                     velocity_setpoint_ = calculate_velocity_setpoint();
-                    // velocity_setpoint_.x = 0.1;
-                    // velocity_setpoint_.y = 0.1;
-                    // velocity_setpoint_.z = 0.0;
                     // Publish set_point
                     publish_trajectory_setpoint({static_cast<float>(path_moved_to_drone_local_coordinates_.x),
                                                  static_cast<float>(path_moved_to_drone_local_coordinates_.y),
