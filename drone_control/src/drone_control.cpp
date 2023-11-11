@@ -609,6 +609,7 @@ private:
 
                         // Change state to IDLE
                         // current_state_ = State::IDLE; // TODO NOTE UNCOMMENT !!!
+                        current_state_ = State::LIMBO;
                     }
                     else
                     {
