@@ -108,12 +108,12 @@ private:
     nav_msgs::msg::Path f2c_path_ros_; // Fields2Cover path in ROS coordinates frame
     px4_msgs::msg::VehicleControlMode vehicle_status_; // Drone status flags
     size_t global_i_ = 0; // global counter for f2c_path_ros_
-    double position_tolerance_ = 0.5; // [m]
+    double position_tolerance_ = 0.3; // 0.5 [m]
     geometry_msgs::msg::Point take_off_waypoint = geometry_msgs::msg::Point{}; // In ROS coordinates
     geometry_msgs::msg::Point home_position_ros_ = geometry_msgs::msg::Point{}; // In ROS coordinates
     double drone_yaw_ros_;
     double take_off_heading_;
-    float take_off_height = 3.0; // Take-off height [m]
+    float take_off_height = 2.2; // Take-off height [m]
     geometry_msgs::msg::Point vehicle_position_ros_ = geometry_msgs::msg::Point{};
     geometry_msgs::msg::Point path_moved_to_drone_local_coordinates_ = geometry_msgs::msg::Point{};
     geometry_msgs::msg::Point velocity_setpoint_ = geometry_msgs::msg::Point{};
@@ -533,7 +533,7 @@ private:
         // TODO Make this more general
         int n_steps = 10;
         // This gives a ground speed of 1 [m/s]
-        double x_vel = 0.1; // 0.5; // NB PX4 x velocity is ROS2 path y anv vice versa
+        double x_vel = 0.1; //0.5; // NB PX4 x velocity is ROS2 path y anv vice versa
         if (global_i_ + n_steps < f2c_path_ros_.poses.size() && global_i_ >= 1)
         {
             if (f2c_path_ros_.poses.at(global_i_-1).pose.position.x ==
@@ -608,8 +608,8 @@ private:
                         set_take_off_waypoint();
 
                         // Change state to IDLE
-                        // current_state_ = State::IDLE; // TODO NOTE UNCOMMENT !!!
-                        current_state_ = State::LIMBO;
+                        current_state_ = State::IDLE;
+                        // current_state_ = State::LIMBO; // For testing manual position control
                     }
                     else
                     {

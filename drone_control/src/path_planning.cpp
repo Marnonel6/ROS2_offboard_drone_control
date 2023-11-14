@@ -406,7 +406,7 @@ private:
                     // hover_home_pose_ = home_pose_;
                     hover_home_pose_.position.x = 0;
                     hover_home_pose_.position.y = 0;
-                    hover_home_pose_.position.z = 3; // 3[m] above home pose
+                    hover_home_pose_.position.z = 2.2; // 3[m] above home pose
                     // Change state to path planning
                     current_state_ = State::PATH_PLANNING;
                     RCLCPP_INFO_STREAM(get_logger(), "State: PATH_PLANNING");
