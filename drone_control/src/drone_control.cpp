@@ -490,6 +490,10 @@ private:
             home_position_ros_.x = vehicle_position_.x;
             home_position_ros_.y = vehicle_position_.y;
             home_position_ros_.z = vehicle_position_.z;
+
+            // Print home position with rclcpp
+            RCLCPP_INFO_STREAM(get_logger(), "Home position: x: " << home_position_ros_.x <<
+                                " y: " << home_position_ros_.y << " z: " << home_position_ros_.z);
         }
         flag_take_off_position = true;
     }

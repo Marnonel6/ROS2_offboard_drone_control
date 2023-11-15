@@ -104,8 +104,11 @@ private:
         // Define field and robot
         F2CRobot robot (2.0, 2.0);
         // NOTE: The z-height that is specified here gets halved in the path for some reason
-        F2CCells field(F2CCell(F2CLinearRing({F2CPoint(5,5,6), F2CPoint(5,25,6), F2CPoint(35,25,6),
-                                              F2CPoint(35,5,6), F2CPoint(5,5,6)})));
+        float mission_height = 2.2; // Mission height in meters
+        float f2c_height = mission_height*2.0;
+        F2CCells field(F2CCell(F2CLinearRing({F2CPoint(5,5,f2c_height), F2CPoint(5,25,f2c_height),
+                                              F2CPoint(35,25,f2c_height), F2CPoint(35,5,f2c_height),
+                                              F2CPoint(5,5,f2c_height)})));
         // Swath generation
         f2c::sg::BruteForce bf;
         f2c::obj::NSwath n_swath_obj;
@@ -200,9 +203,19 @@ private:
                    vehicle_pose_px4_.pose.position.z;
         Eigen::Vector3d ros_enu;
         ros_enu = px4_ros_com::frame_transforms::ned_to_enu_local_frame(px4_ned);
-        vehicle_pose_ros_.pose.position.x = ros_enu(0);
-        vehicle_pose_ros_.pose.position.y = ros_enu(1);
-        vehicle_pose_ros_.pose.position.z = ros_enu(2);
+
+        if (flag_vehicle_odometry_) // Add home pose to get zero start location drone pose
+        {
+            vehicle_pose_ros_.pose.position.x = ros_enu(0) - actual_home_pose_.position.x;
+            vehicle_pose_ros_.pose.position.y = ros_enu(1) - actual_home_pose_.position.y;
+            vehicle_pose_ros_.pose.position.z = ros_enu(2) - actual_home_pose_.position.z;
+        }
+        else // Get actual vehicle pose
+        {
+            vehicle_pose_ros_.pose.position.x = ros_enu(0);
+            vehicle_pose_ros_.pose.position.y = ros_enu(1);
+            vehicle_pose_ros_.pose.position.z = ros_enu(2);
+        }
         // Convert Orientation
         Eigen::Quaterniond px4_q;
         px4_q.x() = vehicle_pose_px4_.pose.orientation.x;
@@ -406,7 +419,7 @@ private:
                     // hover_home_pose_ = home_pose_;
                     hover_home_pose_.position.x = 0;
                     hover_home_pose_.position.y = 0;
-                    hover_home_pose_.position.z = 2.2; // 3[m] above home pose
+                    hover_home_pose_.position.z = 2.2; // 2.2[m] above home pose
                     // Change state to path planning
                     current_state_ = State::PATH_PLANNING;
                     RCLCPP_INFO_STREAM(get_logger(), "State: PATH_PLANNING");
