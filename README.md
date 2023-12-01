@@ -3,6 +3,18 @@
 High-level path planning and off-board control of a Pixhawk flight computer running PX4 with a 
 Raspberry Pi 4B. The code is written in C++ and Python in a ROS2 Humble interface.
 
+# Custom drone built from scratch
+- T-Motor motors, ESCs and propellers
+- Pixhawk 6X Flight computer (PX4 v1.14)
+- Raspberry Pi 4B (Ubuntu 22.04, ROS2 HUMBLE)
+- RTK + Base station
+- Tarot 680 Pro Sport frame
+![Drone](https://github.com/Marnonel6/ROS2_offboard_drone_control/assets/60977336/07003c7a-164e-4a16-8a9a-659559e5334d)
+
+
+# Simple take-off -> hover -> land
+https://github.com/Marnonel6/ROS2_offboard_drone_control/assets/60977336/db2df724-b563-46df-b42c-d3180baed4ce
+
 ## Prerequisites:
 - Ubuntu 22.04
 - Python3
