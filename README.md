@@ -85,8 +85,8 @@ use QGC to install it
 
         make px4_sitl gz_x500
 
-- Start `Qgroundcontrol``
-- Start the `DDS agent`` on the drone control computer:
+- Start `Qgroundcontrol`
+- Start the `DDS agent` on the drone control computer:
 
         MicroXRCEAgent udp4 -p 8888
 - Running `ros2 topic list` should now display all the flight computer topics
@@ -97,7 +97,7 @@ use QGC to install it
 - This will plan a path and then control the drone to follow the path.
 
 # Steps to run off-board autonomous mission on drone:
-- Start `Qgroundcontrol``
+- Start `Qgroundcontrol`
 - Run the launch file to start the agent and all the nodes:
 
         ros2 launch drone_control offboard_control.launch.py 
