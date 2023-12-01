@@ -104,9 +104,6 @@ use QGC to install it
 
 - This will plan a path and then control the drone to follow the path.
 
-
-### Simple ROS2 sensor reader package
-- Instructions [here](https://docs.px4.io/main/en/ros/ros2_comm.html#build-ros-2-workspace)
-
 # References
 - [PX4 DDS topics](https://github.com/PX4/PX4-Autopilot/blob/main/src/modules/uxrce_dds_client/dds_topics.yaml)
+- Simple ROS2 sensor reader package [here](https://docs.px4.io/main/en/ros/ros2_comm.html#build-ros-2-workspace)
