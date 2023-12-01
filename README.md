@@ -1,5 +1,14 @@
 # ROS2 Off-board drone control with DDS and PX4
 
+High-level path planning and off-board control of a Pixhawk flight computer running PX4 with a 
+Raspberry Pi 4B. The code is written in C++ and Python in a ROS2 Humble interface.
+
+## Prerequisites:
+- Ubuntu 22.04
+- Python3
+- C++
+- ROS2 Humble
+
 # Installation & Setup guide
 
 ## Ground control station
@@ -76,26 +85,28 @@ use QGC to install it
 
         make px4_sitl gz_x500
 
-- Start Qgroundcontrol
-- Start the agent on the drone control computer:
+- Start `Qgroundcontrol``
+- Start the `DDS agent`` on the drone control computer:
 
         MicroXRCEAgent udp4 -p 8888
+- Running `ros2 topic list` should now display all the flight computer topics
+- Alternatively to running the agent you can run the off-board control ROS2 package with:
+
+        ros2 launch drone_control offboard_control.launch.py 
+
+- This will plan a path and then control the drone to follow the path.
+
+# Steps to run off-board autonomous mission on drone:
+- Start `Qgroundcontrol``
+- Run the launch file to start the agent and all the nodes:
+
+        ros2 launch drone_control offboard_control.launch.py 
+
+- This will plan a path and then control the drone to follow the path.
+
 
 ### Simple ROS2 sensor reader package
 - Instructions [here](https://docs.px4.io/main/en/ros/ros2_comm.html#build-ros-2-workspace)
-
-# Off-board RPi control over serial (UART->Telem 2)
-- Start the agent on the drone control computer:
-
-        TODO: MicroXRCEAgent -----SOME SERIAL WAY------ 
-
-- To see if DDS client is running on pixhawk
-    - Open Qgroundcontrol
-    - Open Mavlink Console
-    - Run:
-
-            uxrce_dds_client status
-
 
 # References
 - [PX4 DDS topics](https://github.com/PX4/PX4-Autopilot/blob/main/src/modules/uxrce_dds_client/dds_topics.yaml)
