@@ -1,5 +1,5 @@
 /**
- * ROS2 path planning node utilizing the packages Fields2Cover
+ * ROS2 path planning node utilizing the package Fields2Cover
  * 
  * Reference:
  *     https://github.com/Fields2Cover/Fields2Cover
@@ -45,17 +45,6 @@ public:
         // QoS settings
         rmw_qos_profile_t qos_profile = rmw_qos_profile_sensor_data;
         auto qos = rclcpp::QoS(rclcpp::QoSInitialization(qos_profile.history, 5), qos_profile);
-
-        // // Parameter description
-        // auto frequency_des = rcl_interfaces::msg::ParameterDescriptor{};
-        // frequency_des.description = "Timer callback frequency [Hz]";
-        // // Declare default parameters values
-        // declare_parameter("frequency", 100, frequency_des); // Hz for timer_callback
-        // // Get params - Read params from yaml file that is passed in the launch file
-        // int frequency = get_parameter("frequency").get_parameter_value().get<int>();
-        // TODO NOTE Set field, drone parameters from a .json file
-
-        // Initialize variables
 
         // Create publishers
         path_publisher_ = create_publisher<nav_msgs::msg::Path>("/f2c_path", 10);
@@ -117,7 +106,7 @@ private:
         auto boustrophedon_swaths = boustrophedon_sorter.genSortedSwaths(swaths, 1);
         // Path planner
         f2c::pp::PathPlanning path_planner;
-        robot.setMinRadius(0.0); // 2.0);  // m
+        robot.setMinRadius(0.0); // 2.0);  // m Drone has a 0 turning radius
         // Create swath connections using Dubins curves with Continuous curvature
         // f2c::pp::DubinsCurvesCC dubins_cc;
         f2c::pp::ReedsSheppCurves reeds_shepp;
@@ -129,7 +118,7 @@ private:
         F2CPath new_path = path_dubins_cc.discretize_swath(discretize_step_size);
         // Save to file
         // new_path.saveToFile("discretized_swath_path.csv", 4); // Specify precision to the significant number
-        // Visualize
+        // Visualize a plot
         // f2c::Visualizer::figure();
         // f2c::Visualizer::plot(field);
         // f2c::Visualizer::plot(new_path);
@@ -322,11 +311,6 @@ private:
         }
     }
 
-    ///
-    ///
-    /// LIBRARY functions later!!
-    ///
-    ///
     /**
      * @brief Calculate 3D Euclidean distance
      * @param v1 First 3D point
@@ -396,12 +380,6 @@ private:
         return angle;
     }
 
-    ///
-    ///
-    /// LIBRARY functions later!!
-    ///
-    ///
-
     /**
      * @brief Main Timer callback
      * @return void
@@ -428,9 +406,6 @@ private:
             case State::PATH_PLANNING:
                 // Mission Path planning with Fields2Cover
                 f2c_path_ = path_planning();
-
-                // TODO Create take-off path to the height of the Fields2Cover path
-                // For now just take-off is a setpoint at 3[m]
 
                 // Create path from hover to start of Fields2Cover path
                 plan_straight_path(path_, hover_home_pose_,

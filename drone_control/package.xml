@@ -5,7 +5,7 @@
   <version>0.0.1</version>
   <description>Off-board drone control with ROS2 and PX4</description>
   <maintainer email="marthinusnel2023@u.northwestern.edu">Marno Nel</maintainer>
-  <license>TODO: License declaration</license>
+  <license>GPLv3</license>
 
   <buildtool_depend>ament_cmake</buildtool_depend>
   <buildtool_depend>eigen3_cmake_module</buildtool_depend>
