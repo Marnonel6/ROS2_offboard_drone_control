@@ -37,9 +37,10 @@ use QGC to install it
         make px4_fmu-v6x_default upload # Plug in Pixhawk before running this
 
 - If not using DDS, but serial and mavsdk then PX4 v1.13 -> This enables HITL
-- TODO: Params to set in QGC
+<!-- - TODO: Params to set in QGC
 
         LIST PARAMS HER __________________________________________________________________________________________________________________________________
+-->
 
 ## Setup on drone control computer (Laptop for SITL or RPi 4 on drone)
 - [Install ROS2 Humble](https://docs.px4.io/main/en/ros/ros2_comm.html#install-ros-2)
